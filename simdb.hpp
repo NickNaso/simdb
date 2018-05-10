@@ -1735,6 +1735,120 @@ public:
     return put(key.data(), (u32)key.length(), val.data(), (u32)(val.size()*sizeof(T)) );
   }
   // end separated C++ functions
+  #ifdef _WIN32
+  auto simdb_listDBs(simdb_error* error_code=nullptr) -> std::vector<std::string>
+  {
+    using namespace std;
+
+    static HMODULE                _hModule               = nullptr; 
+    static NTOPENDIRECTORYOBJECT  NtOpenDirectoryObject  = nullptr;
+    static NTOPENFILE             NtOpenFile             = nullptr;
+    static NTQUERYDIRECTORYOBJECT NtQueryDirectoryObject = nullptr;
+    static RTLINITUNICODESTRING   RtlInitUnicodeString   = nullptr;
+    
+    vector<string> ret;
+
+    if(!NtOpenDirectoryObject){  
+      NtOpenDirectoryObject  = (NTOPENDIRECTORYOBJECT)GetLibraryProcAddress( _T("ntdll.dll"), "NtOpenDirectoryObject");
+    }
+    if(!NtQueryDirectoryObject){ 
+      NtQueryDirectoryObject = (NTQUERYDIRECTORYOBJECT)GetLibraryProcAddress(_T("ntdll.dll"), "NtQueryDirectoryObject");
+    }
+    if(!NtOpenFile){ 
+      NtOpenFile = (NTOPENFILE)GetLibraryProcAddress(_T("ntdll.dll"), "NtOpenFile");
+    }
+
+    HANDLE     hDir = NULL;
+    IO_STATUS_BLOCK  isb = { 0 };
+    DWORD sessionId;
+    BOOL         ok = ProcessIdToSessionId(GetCurrentProcessId(), &sessionId);
+    if(!ok){ return { "Could not get current session" }; }
+
+    wstring     sesspth = L"\\Sessions\\" + to_wstring(sessionId) + L"\\BaseNamedObjects";
+    const WCHAR* mempth = sesspth.data();
+    
+    WCHAR buf[4096];
+    UNICODE_STRING pth = { 0 };
+    pth.Buffer         = (WCHAR*)mempth;
+    pth.Length         = (USHORT)lstrlenW(mempth) * sizeof(WCHAR);
+    pth.MaximumLength  = pth.Length;
+
+    OBJECT_ATTRIBUTES oa = { 0 };
+    oa.Length             = sizeof( OBJECT_ATTRIBUTES );
+    oa.RootDirectory      = NULL;
+    oa.Attributes         = OBJ_CASE_INSENSITIVE;                               
+    oa.ObjectName         = &pth;
+    oa.SecurityDescriptor = NULL;                        
+    oa.SecurityQualityOfService = NULL;
+
+    NTSTATUS status;
+    status = NtOpenDirectoryObject(
+      &hDir, 
+      /*STANDARD_RIGHTS_READ |*/ DIRECTORY_QUERY, 
+      &oa);
+
+    if(hDir==NULL || status!=STATUS_SUCCESS){ return { "Could not open file" }; }
+
+    BOOLEAN rescan = TRUE;
+    ULONG      ctx = 0;
+    ULONG   retLen = 0;
+    do
+    {
+      status = NtQueryDirectoryObject(hDir, buf, sizeof(buf), TRUE, rescan, &ctx, &retLen);
+      rescan = FALSE;
+      auto info = (OBJECT_DIRECTORY_INFORMATION*)buf;
+
+      if( lstrcmpW(info->type.Buffer, L"Section")!=0 ){ continue; }
+      WCHAR wPrefix[] = L"simdb_";
+      size_t  pfxSz   = sizeof(wPrefix);
+      if( strncmp( (char*)info->name.Buffer, (char*)wPrefix, pfxSz)!=0 ){  continue; }
+
+      wstring  wname = wstring( (WCHAR*)info->name.Buffer );
+      wstring_convert<codecvt_utf8<wchar_t>> cnvrtr;
+      string    name = cnvrtr.to_bytes(wname);
+
+      ret.push_back(name);
+    }while(status!=STATUS_NO_MORE_ENTRIES);
+    
+    return ret;
+  }
+#else
+  auto simdb_listDBs(simdb_error* error_code=nullptr) -> std::vector<std::string>
+  {
+    using namespace std;
+
+    char   prefix[] = "simdb_";
+    size_t  pfxSz   = sizeof(prefix)-1;
+
+    vector<string> ret;
+
+    DIR* d;                                          // d is directory handle
+    errno = ENOENT;
+    if( (d=opendir(P_tmpdir))==NULL || errno!=ENOENT){
+      closedir(d);
+      if(error_code){ *error_code = simdb_error::DIR_NOT_FOUND; }
+      return ret;
+    }
+ 
+    struct dirent*     dent;                         // dent is directory entry 
+    while( (dent=readdir(d)) != NULL )
+    {
+      if(errno != ENOENT){
+        closedir(d);
+        if(error_code){ *error_code = simdb_error::DIR_ENTRY_ERROR; }        
+        return ret;
+      }
+
+      if(strncmp(dent->d_name, prefix, pfxSz)==0){
+        ret.push_back(dent->d_name);
+      }
+    }
+
+    closedir(d);
+    if(error_code){ *error_code = simdb_error::NO_ERRORS; }
+    return ret;
+  }
+#endif
 
 };
 

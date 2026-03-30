@@ -332,7 +332,7 @@ namespace {
     //}
     PVOID  GetLibraryProcAddress(PSTR LibraryName, PSTR ProcName)
     {
-      return GetProcAddress(GetModuleHandleA(LibraryName), ProcName);
+      return (PVOID)GetProcAddress(GetModuleHandleA(LibraryName), ProcName);
     }
     int               win_printf(const char * format, ...)
     {
@@ -462,7 +462,7 @@ public:
     }
   }
 
-  bool headCmpEx(u64* expected, au64 desired)
+  bool headCmpEx(u64* expected, u64 desired)
   {
     using namespace std;
 
@@ -1755,10 +1755,10 @@ private:
     s_cnt        = rval.s_cnt;
     s_blockSize  = rval.s_blockSize;
     s_blockCount = rval.s_blockCount;
-    memcpy(&s_cs, &rval.s_cs, sizeof(s_cs));
-    memcpy(&s_ch, &rval.s_ch, sizeof(s_ch));
+    memcpy((void*)&s_cs, (const void*)&rval.s_cs, sizeof(s_cs));
+    memcpy((void*)&s_ch, (const void*)&rval.s_ch, sizeof(s_ch));
 
-    m_mem       =  move(rval.m_mem);
+    m_mem       =  std::move(rval.m_mem);
     m_error     =  rval.m_error;
     m_nxtChIdx  =  rval.m_nxtChIdx;
     m_curChIdx  =  rval.m_curChIdx;

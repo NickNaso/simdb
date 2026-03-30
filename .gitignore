@@ -104,3 +104,8 @@ cmake_install.cmake
 
 # Visual Studio
 .vs/
+
+# Zig
+.zig-cache/
+zig-cache/
+zig-out/

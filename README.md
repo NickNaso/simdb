@@ -80,3 +80,21 @@ cmake --build build --config Debug -j
 cd build && ctest -C Debug --output-on-failure
 ```
 Continuous integration flows run these standards concurrently across Linux, macOS, and Windows.
+
+## Zig Integration
+SimDB fully supports adoption via the [Zig Build System](https://ziglang.org/learn/build-system/). Since it is purely a C++ header library, Zig can flawlessly propagate it into cross-compiled architectures effortlessly via `build.zig.zon`. 
+To add it as a dependency, run:
+```bash
+zig fetch --save https://github.com/NickNaso/simdb/archive/refs/heads/main.zip
+```
+
+And expose it inside your consumer's `build.zig` like this:
+```zig
+const simdb_dep = b.dependency("simdb", .{});
+exe.root_module.addImport("simdb", simdb_dep.module("simdb"));
+
+// If you need the physical library binaries:
+exe.linkLibrary(simdb_dep.artifact("simdb"));
+```
+
+> **Note:** Our CI pipeline automatically cross-compiles `.lib`, `.dll`, `.a`, and `.so` library artifacts for Windows, Linux, and macOS alongside the `simdb.hpp` header. You can download the latest pre-compiled platform `.zip` payloads natively from the **[GitHub Releases](https://github.com/NickNaso/simdb/releases)** page.

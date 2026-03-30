@@ -1,0 +1,12 @@
+.{
+    .name = .simdb,
+    .version = "1.0.0",
+    .fingerprint = 0xdc5c232f312685af,
+    .paths = .{
+        "simdb.hpp",
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+        "src/",
+    },
+}

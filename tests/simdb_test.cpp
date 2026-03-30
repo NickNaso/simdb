@@ -71,3 +71,21 @@ TEST_F(SimdbTest, GetWithVersion) {
     // Test the string returning overload
     EXPECT_EQ(db->get(keys[0]), "version_1");
 }
+
+TEST_F(SimdbTest, BinaryDataSerialization) {
+    // Generate synthetic binary data (e.g., matching a raw image, protobuf, or dense numbers)
+    std::vector<uint8_t> original_data(4096); 
+    for (size_t i = 0; i < original_data.size(); ++i) {
+        original_data[i] = static_cast<uint8_t>(i % 256);
+    }
+    
+    // Store binary data natively through the STL vector template overload
+    db->put("binary_payload", original_data);
+    
+    // Extract binary data identically via memory mapping
+    std::vector<uint8_t> retrieved_data = db->get<uint8_t>("binary_payload");
+    
+    // Ensure accurate binary equivalence and retrieval lengths
+    EXPECT_EQ(original_data.size(), retrieved_data.size());
+    EXPECT_EQ(original_data, retrieved_data);
+}

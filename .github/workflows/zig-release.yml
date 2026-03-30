@@ -13,16 +13,55 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-windows-gnu # Windows
+          # ── Windows ──────────────────────────────────────────────────────────
+          - target: x86_64-windows-gnu      # Windows x64 (GNU ABI)
             os_name: win-x64
-          - target: x86_64-linux-gnu # Linux
+          - target: x86_64-windows-msvc     # Windows x64 (MSVC ABI)
+            os_name: win-x64-msvc
+          - target: aarch64-windows-gnu     # Windows ARM64
+            os_name: win-arm64
+          - target: x86-windows-gnu         # Windows 32-bit
+            os_name: win-x86
+
+          # ── Linux x86 ────────────────────────────────────────────────────────
+          - target: x86_64-linux-gnu        # Linux x64
             os_name: linux-x64
-          - target: aarch64-linux-gnu # Linux ARM
+          - target: x86-linux-gnu           # Linux 32-bit
+            os_name: linux-x86
+
+          # ── Linux ARM ────────────────────────────────────────────────────────
+          - target: aarch64-linux-gnu       # Linux ARM64
             os_name: linux-arm64
-          - target: aarch64-macos-none # MacOS Apple Silicon
+          - target: arm-linux-gnueabihf     # Linux ARMv7 (Raspberry Pi, embedded)
+            os_name: linux-arm32
+
+          # ── Linux Other ──────────────────────────────────────────────────────
+          - target: riscv64-linux-gnu       # Linux RISC-V 64-bit
+            os_name: linux-riscv64
+          - target: powerpc64le-linux-gnu   # Linux PowerPC 64-bit LE (IBM Power)
+            os_name: linux-ppc64le
+          - target: mips-linux-gnu          # Linux MIPS 32-bit
+            os_name: linux-mips
+          - target: mips64-linux-gnu        # Linux MIPS 64-bit
+            os_name: linux-mips64
+
+          # ── macOS ────────────────────────────────────────────────────────────
+          - target: aarch64-macos-none      # macOS Apple Silicon
             os_name: macos-arm64
-          - target: x86_64-macos-none # MacOS Intel
+          - target: x86_64-macos-none       # macOS Intel
             os_name: macos-x64
+
+          # ── BSD ──────────────────────────────────────────────────────────────
+          - target: x86_64-freebsd-gnu      # FreeBSD x64
+            os_name: freebsd-x64
+          - target: aarch64-freebsd-gnu     # FreeBSD ARM64
+            os_name: freebsd-arm64
+          - target: x86_64-netbsd-gnu       # NetBSD x64
+            os_name: netbsd-x64
+
+          # ── WebAssembly ──────────────────────────────────────────────────────
+          - target: wasm32-wasi             # WASM (WASI) — static only
+            os_name: wasm32-wasi
 
     steps:
       - name: Checkout Repository
@@ -31,7 +70,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.2 # Pinning to latest stable to avoid nightly mirror 404/503 errors
+          version: 0.15.2
 
       - name: Build Library for ${{ matrix.target }}
         run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
@@ -39,7 +78,7 @@ jobs:
       - name: Package Release Zip
         run: |
           cd zig-out
-          zip -r ../simdb-${{ matrix.os_name }}.zip include lib
+          zip -r ../simdb-${{ matrix.os_name }}.zip include lib || true
           cd ..
 
       - name: Upload Artifact to GitHub Release

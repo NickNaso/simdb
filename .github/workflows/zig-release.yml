@@ -31,17 +31,17 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
         with:
-          version: master # Targeting latest to maximize compiler API functionality for modules
+          version: 0.15.2 # Pinning to stable to avoid nightly mirror 404/503 errors
 
       - name: Build Library for ${{ matrix.target }}
         run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
-        
+
       - name: Package Release Zip
         run: |
           cd zig-out
           zip -r ../simdb-${{ matrix.os_name }}.zip include lib
           cd ..
-          
+
       - name: Upload Artifact to GitHub Release
         uses: softprops/action-gh-release@v2
         with:

@@ -11,28 +11,36 @@ pub fn build(b: *std.Build) void {
     });
     simdb_mod.addIncludePath(b.path("."));
 
-    const simdb_static = b.addLibrary(.{
-        .linkage = .static,
-        .name = "simdb",
+    const static_mod = b.createModule(.{
         .target = target,
         .optimize = optimize,
     });
-    simdb_static.root_module.addIncludePath(b.path("."));
-    simdb_static.root_module.link_libc = true;
-    simdb_static.root_module.link_libcpp = true;
+    static_mod.addIncludePath(b.path("."));
+    static_mod.link_libc = true;
+    static_mod.link_libcpp = true;
+
+    const simdb_static = b.addLibrary(.{
+        .linkage = .static,
+        .name = "simdb",
+        .root_module = static_mod,
+    });
     simdb_static.addCSourceFile(.{ .file = b.path("src/simdb.cpp"), .flags = &[_][]const u8{"-std=c++14", "-Wno-deprecated-declarations"} });
     simdb_static.installHeader(b.path("simdb.hpp"), "simdb.hpp");
     b.installArtifact(simdb_static);
 
-    const simdb_shared = b.addLibrary(.{
-        .linkage = .dynamic,
-        .name = "simdb",
+    const shared_mod = b.createModule(.{
         .target = target,
         .optimize = optimize,
     });
-    simdb_shared.root_module.addIncludePath(b.path("."));
-    simdb_shared.root_module.link_libc = true;
-    simdb_shared.root_module.link_libcpp = true;
+    shared_mod.addIncludePath(b.path("."));
+    shared_mod.link_libc = true;
+    shared_mod.link_libcpp = true;
+
+    const simdb_shared = b.addLibrary(.{
+        .linkage = .dynamic,
+        .name = "simdb",
+        .root_module = shared_mod,
+    });
     simdb_shared.addCSourceFile(.{ .file = b.path("src/simdb.cpp"), .flags = &[_][]const u8{"-std=c++14", "-Wno-deprecated-declarations"} });
     b.installArtifact(simdb_shared);
 }

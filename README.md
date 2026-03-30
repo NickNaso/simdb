@@ -2,9 +2,9 @@
 ![alt text](https://github.com/LiveAsynchronousVisualizedArchitecture/simdb/blob/master/numbered_slots_upshot.jpg "A key value store is kind of like this")
 
 # SimDB
-#### A high performance, shared memory, lock free, cross platform, single file, no dependencies, C++11 key-value store.
+#### A high performance, shared memory, lock-free, cross platform, single file, no dependencies, C++20 key-value store.
 
-SimDB is part of LAVA (Live Asynchronous Visualized Architecture) which is a series of single file, minimal dependency, C++11 files to create highly concurrent software while the program being written runs live with internal data visualized.
+SimDB is part of LAVA (Live Asynchronous Visualized Architecture) which is a series of single file, minimal dependency, C++20 files to create highly concurrent software while the program being written runs live with internal data visualized.
 
 - Hash based key-value store created to be a fundamental piece of a larger software architecture. 
 
@@ -14,9 +14,9 @@ SimDB is part of LAVA (Live Asynchronous Visualized Architecture) which is a ser
 
 - Lock Free - The user facing functions are thread-safe and lock free with the exception of the constructor (to avoid race conditions between multiple processes creating the memory mapped file at the same time). 
 
-- Cross Platform - Compiles with Visual Studio 2013 and ICC 15.0 on Windows, gcc 5.4 on Linux, gcc on OS X, and clang on OS X.
+- Cross Platform - Powered by CMake and tested extensively across Windows MSVC 2022, linux gcc/clang, and Apple Clang on macOS.
 
-- Single File - simdb.hpp and the C++11 standard library is all you need. No Windows SDK or any other dependencies, not even from the parent project. 
+- Single File - simdb.hpp and the C++20 standard library is all you need. No Windows SDK or any other dependencies, not even from the parent project. 
 
 - Apache 2.0 License - No need to GPL your whole program to include one file. 
 
@@ -68,4 +68,15 @@ Not shown is del(), which will take a key and delete it.
 
 *Inside simdb.hpp there is a more extensive explanation of the inner working and how it achieves lock free concurrency*
 
+## API Reference
+For a complete and highly detailed breakdown of all available structs, constructors, methods, keys iterators, error handling states, and utility properties exposed by the interface, please read the [API Reference](./API_REFERENCE.md).
 
+## Building and Testing
+SimDB has migrated to a modern **CMake** implementation backed by **GoogleTest**. Ensure your toolchain supports standard `C++20`.
+To build the unit testing executable suite:
+```bash
+cmake -S . -B build
+cmake --build build --config Debug -j
+cd build && ctest -C Debug --output-on-failure
+```
+Continuous integration flows run these standards concurrently across Linux, macOS, and Windows.

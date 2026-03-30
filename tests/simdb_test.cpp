@@ -41,3 +41,33 @@ TEST_F(SimdbTest, ListDatabases) {
     auto dbs = simdb_listDBs();
     EXPECT_FALSE(dbs.empty());
 }
+
+TEST_F(SimdbTest, OutOfSpaceBehavior) {
+    // Create a very small DB: blockSize=64, blockCount=5
+    simdb small_db("simdb_test_small", 64, 5);
+    
+    bool success = true;
+    for(int i=0; i<100; ++i) {
+        success = small_db.put("key_" + std::to_string(i), "value_" + std::to_string(i));
+        if (!success) break;
+    }
+    
+    EXPECT_FALSE(success);
+    EXPECT_EQ(small_db.error(), simdb_error::OUT_OF_SPACE);
+}
+
+TEST_F(SimdbTest, GetWithVersion) {
+    db->put("versioned_key", "version_1");
+    // Retrieve via getKeyStrs which returns VerStr structs
+    std::vector<simdb::VerStr> keys = db->getKeyStrs();
+    ASSERT_FALSE(keys.empty());
+
+    std::string out_val;
+    bool ok = db->get(keys[0], &out_val);
+    
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(out_val, "version_1");
+    
+    // Test the string returning overload
+    EXPECT_EQ(db->get(keys[0]), "version_1");
+}

@@ -107,30 +107,6 @@
 
 */
 
-// -todo: make a list cut itself off at the end by inserting LIST_END as the last value 
-// -todo: look into readers and matching - should two threads with the same key ever be able to double insert into the db? - MATCH_REMOVED was not re-looping on the current index
-// -todo: make MATCH_REMOVED restart the current index
-// -todo: make runIfMatch return a pair that includes the return value of the function it runs
-// -todo: make sure version setting on free sets the version to 0 on the whole list
-// -todo: make sure incReaders and decReaders are using explicit sequential consistency - already done
-// -todo: make sure that if there is a version mismatch when comparing a block list, the block list version is still used when trying to swap the version+idx - would only the index actually be needed since a block list with incremented readers won't give up its index, thus it should be unique?
-// -todo: take version argument out of incReaders and decReaders
-// -todo: make a temporary thread_local variable for each thread to count how many allocations it has made and how many allocations it has freed - worked very well to narrow down the problem
-// -todo: make sure that the VerIdx being returned from putHashed is actually what was atomically swapped out
-// -todo: try putting LIST_END at the end of the the concurrent lists - not needed for now
-// -todo: debug why 2 threads inserting the same key seems to need all blocks instead of just 3 * 2 * 2 (three blocks per key * two threads * two block lists per thread) - delete flag in block lists was not always set
-// -todo: assert that the block list is never already deleted when being deleted from putHashed - that wasn't the problem
-// -todo: check what happens when the same key but different versions are inserted - do two different versions end up in the DB? does one version end up undeletable ?  - this was fixed by only comparing the key without the version
-// -todo: check path of thread that deletes a key, make sure it replaces the index in the hash map - how do two conflicting indices in the hash map resolve? the thread that replaces needs to delete the old allocation using the version - is the version / deleted flag being changed atomically in the block list 
-// -todo: change the Match enum to be an bit bitfield with flags - not needed for now
-// -todo: make simdb len() and get() ignore version numbers for match and only match keys
-
-// todo: make sure get() only increments and decrements the first/key block in the block list
-// todo: make simdb give a proper error if running out of space
-// todo: make simdb expand when eighther out of space or initialized with a larger amount of space
-// todo: make a get function that takes a key version struct
-// todo: make a get function that returns a tbl if tbl.hpp is included
-
 #ifdef _MSC_VER
   #pragma once
   #pragma warning(push, 0)
@@ -390,7 +366,8 @@ enum class simdb_error {
   SHARED_MEMORY_ERROR,
   FTRUNCATE_FAILURE,
   FLOCK_FAILURE,
-  PATH_TOO_LONG
+  PATH_TOO_LONG,
+  OUT_OF_SPACE
 };
 
 template<class T> 
@@ -833,15 +810,14 @@ public:
   }
   u32         readBlock(u32  blkIdx, u32 version, void *const bytes, u32 ofst=0, u32 len=0) const
   {
-    //BlkLst bl = incReaders(blkIdx, version);               
-    BlkLst bl = incReaders(blkIdx);
-      if(bl.version==0){ return 0; }
-      u32   blkFree  =  blockFreeSize();
-      u8*         p  =  blockFreePtr(blkIdx);
-      u32    cpyLen  =  len==0?  blkFree-ofst  :  len;
-      memcpy(bytes, p+ofst, cpyLen);
-    decReadersOrDel(blkIdx);
-    //decReadersOrDel(blkIdx, version);
+    // Caller holds readers lock on HEAD sequence block, ensuing chain validity.
+    BlkLst bl = s_bls[blkIdx];
+    if(bl.version==0 || bl.version!=version){ return 0; }
+    
+    u32   blkFree  =  blockFreeSize();
+    u8*         p  =  blockFreePtr(blkIdx);
+    u32    cpyLen  =  len==0?  blkFree-ofst  :  len;
+    memcpy(bytes, p+ofst, cpyLen);
 
     return cpyLen;
   }
@@ -1865,7 +1841,13 @@ public:
   }
   bool         put(const void *const key, u32 klen, const void *const val, u32 vlen, u32* out_startBlock=nullptr)
   {
-    return s_ch.put(key, klen, val, vlen, out_startBlock);
+    bool success = s_ch.put(key, klen, val, vlen, out_startBlock);
+    if (!success) {
+      m_error = simdb_error::OUT_OF_SPACE;
+    } else {
+      m_error = simdb_error::NO_ERRORS;
+    }
+    return success;
   }
   bool         del(const void *const key, u32 klen){ return s_ch.del(key, klen); }
 
@@ -1978,6 +1960,23 @@ public:
   {
     str ret;
     if(this->get(key, &ret)) return ret;
+    else return str("");
+  }
+  bool         get(VerStr const& vs, str* out_value) const
+  {
+    u32 vlen = 0;
+    u32 check_ver = 0;
+    i64 l = len(vs.str.data(), (u32)vs.str.length(), &vlen, &check_ver);
+    if(l > 0 && check_ver == vs.ver) {
+      new (out_value) std::string(vlen,'\0');
+      return get(vs.str.data(), (u32)vs.str.length(), (void*)out_value->data(), vlen);
+    }
+    return false;
+  }
+  auto         get(VerStr const& vs) const -> std::string
+  {
+    str ret;
+    if(this->get(vs, &ret)) return ret;
     else return str("");
   }
   VerStr    nxtKey(u64* searched=nullptr)               const

@@ -1,0 +1,9 @@
+﻿Versione di MSBuild 17.10.4+10fbfbf2e per .NET Framework
+
+  gmock.vcxproj -> C:\Users\nicol\Downloads\simdb-master\simdb-master\build\lib\Debug\gmock.lib
+  gmock_main.vcxproj -> C:\Users\nicol\Downloads\simdb-master\simdb-master\build\lib\Debug\gmock_main.lib
+  gtest.vcxproj -> C:\Users\nicol\Downloads\simdb-master\simdb-master\build\lib\Debug\gtest.lib
+  gtest_main.vcxproj -> C:\Users\nicol\Downloads\simdb-master\simdb-master\build\lib\Debug\gtest_main.lib
+  simdb_test.cpp
+C:\Users\nicol\Downloads\simdb-master\simdb-master\simdb.hpp(1347,99): error C3861: 'vi': identificatore non trovato [C:\Users\nicol\Downloads\simdb-master\simdb-master\build\simdb_test.vcxproj]
+C:\Users\nicol\Downloads\simdb-master\simdb-master\simdb.hpp(1347,99): error C2065: 'vi': identificatore non dichiarato [C:\Users\nicol\Downloads\simdb-master\simdb-master\build\simdb_test.vcxproj]

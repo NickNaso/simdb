@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "cpp-coding-standards": {
+      "source": "affaan-m/everything-claude-code",
+      "sourceType": "github",
+      "computedHash": "78e483c066cbd04aabfff8d4d179494c6dd70140ce1dae4f8e53d8fdb080f7d0"
+    },
+    "cpp-testing": {
+      "source": "affaan-m/everything-claude-code",
+      "sourceType": "github",
+      "computedHash": "e101660729cbccd5ff2ce24995a6361b2b46b9f7ff0520e4188678336db7de28"
+    },
+    "documentation-writer": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "ee53d65b163cd7eb953a930c95841cfe398cc2c0bd24c06508bbaa07c432be35"
+    }
+  }
+}

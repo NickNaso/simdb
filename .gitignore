@@ -101,6 +101,7 @@ CMakeCache.txt
 CMakeFiles/
 Makefile
 cmake_install.cmake
+.cache
 
 # Visual Studio
 .vs/

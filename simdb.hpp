@@ -1563,7 +1563,7 @@ public:
     u64 len = strlen(sm.path) + strlen(name);
     if(len > sizeof(sm.path)-1){
       *error_code = simdb_error::PATH_TOO_LONG;
-      return move(sm);
+      return std::move(sm);
     }else{ strcat(sm.path, name); }
 
     #ifdef _WIN32      // windows
@@ -1632,8 +1632,7 @@ public:
         fcntl(sm.fileHndl, F_GETLK, &flock);
         flock(sm.fileHndl, LOCK_EX);              // exclusive lock  // LOCK_NB
         //fcntl(sm.fileHndl, F_PREALLOCATE);
-        #if defined(__linux__) 
-        #else 
+        #if defined(__APPLE__) || defined(__MACH__)
           fcntl(sm.fileHndl, F_ALLOCATECONTIG);
         #endif
 
@@ -1659,7 +1658,7 @@ public:
     //if(alignment!=0){ alignAddr = addr + ((alignment-addr%alignment)%alignment); }          // why was the second modulo needed?
     sm.ptr        = (void*)(alignAddr);
 
-    return move(sm);
+    return std::move(sm);
   }
 
   SharedMem() :

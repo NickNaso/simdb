@@ -117,7 +117,7 @@
 
 // turn asserts on an off - not sure of the best way to handle this with gcc and clang yet
 #ifdef _MSC_VER
-  #if !defined(_DEBUG)
+  #if !defined(_DEBUG) && !defined(NDEBUG)
     #define NDEBUG
   #endif
 #endif

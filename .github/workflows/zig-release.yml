@@ -16,8 +16,9 @@ jobs:
           # ── Windows ──────────────────────────────────────────────────────────
           - target: x86_64-windows-gnu      # Windows x64 (GNU ABI)
             os_name: win-x64
-          - target: x86_64-windows-msvc     # Windows x64 (MSVC ABI)
-            os_name: win-x64-msvc
+          # x86_64-windows-msvc is intentionally omitted: Zig cannot provide
+          # libc for MSVC ABI when cross-compiling from Linux. Build natively
+          # on Windows if an MSVC-compatible binary is required.
           - target: aarch64-windows-gnu     # Windows ARM64
             os_name: win-arm64
           - target: x86-windows-gnu         # Windows 32-bit
@@ -40,9 +41,9 @@ jobs:
             os_name: linux-riscv64
           - target: powerpc64le-linux-gnu   # Linux PowerPC 64-bit LE (IBM Power)
             os_name: linux-ppc64le
-          - target: mips-linux-gnu          # Linux MIPS 32-bit
+          - target: mips-linux-gnueabi      # Linux MIPS 32-bit (soft-float EABI)
             os_name: linux-mips
-          - target: mips64-linux-gnu        # Linux MIPS 64-bit
+          - target: mips64-linux-gnuabi64   # Linux MIPS 64-bit (n64 ABI)
             os_name: linux-mips64
 
           # ── macOS ────────────────────────────────────────────────────────────
@@ -52,11 +53,11 @@ jobs:
             os_name: macos-x64
 
           # ── BSD ──────────────────────────────────────────────────────────────
-          - target: x86_64-freebsd-gnu      # FreeBSD x64
+          - target: x86_64-freebsd-none     # FreeBSD x64
             os_name: freebsd-x64
-          - target: aarch64-freebsd-gnu     # FreeBSD ARM64
+          - target: aarch64-freebsd-none    # FreeBSD ARM64
             os_name: freebsd-arm64
-          - target: x86_64-netbsd-gnu       # NetBSD x64
+          - target: x86_64-netbsd-none      # NetBSD x64
             os_name: netbsd-x64
 
           # ── WebAssembly ──────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2

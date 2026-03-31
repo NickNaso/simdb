@@ -60,9 +60,10 @@ jobs:
           - target: x86_64-netbsd-none      # NetBSD x64
             os_name: netbsd-x64
 
-          # ── WebAssembly ──────────────────────────────────────────────────────
-          - target: wasm32-wasi             # WASM (WASI) — static only
-            os_name: wasm32-wasi
+          # wasm32-wasi is intentionally omitted: SimDB relies on OS-level
+          # shared memory (mmap), file descriptors, and POSIX directory APIs
+          # (opendir, readdir, P_tmpdir) that do not exist in the WASM/WASI
+          # sandbox. A WASM build would produce a non-functional artifact.
 
     steps:
       - name: Checkout Repository

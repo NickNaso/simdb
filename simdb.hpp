@@ -2381,46 +2381,40 @@ public:
 
     bool fully_consumed = true;
 
-    try {
-      // Skip key blocks
-      {
-        u32 key_rem = bl.klen;
-        while (key_rem >= blk_sz) {
-          CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
-          if (nxt.version != version) { fully_consumed = false; goto stream_done; }
-          cur     = nxt.idx;
-          key_rem -= blk_sz;
-        }
-        // Partial key in this block — value starts at offset key_rem
-        u32 val_in_first = blk_sz - bl.klen % blk_sz;
-        if (bl.klen % blk_sz != 0) {
-          u32 chunk_len = val_in_first < vlen ? val_in_first : vlen;
-          const void* ptr = s_cs.blockFreePtr(cur) + (bl.klen % blk_sz);
-          if (!cb(ptr, chunk_len)) { fully_consumed = false; goto stream_done; }
-          u32 consumed = chunk_len;
-          if (consumed >= vlen) goto stream_done;
-          CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
-          if (nxt.version != version) { fully_consumed = false; goto stream_done; }
-          cur = nxt.idx;
-          u32 remaining = vlen - consumed;
-          while (remaining > 0 && cur != CncrStr::LIST_END) {
-            u32 clen = remaining < blk_sz ? remaining : blk_sz;
-            const void* p = s_cs.blockFreePtr(cur);
-            if (!cb(p, clen)) { fully_consumed = false; goto stream_done; }
-            remaining -= clen;
-            if (remaining > 0) {
-              CncrStr::VerIdx n2 = s_cs.nxtBlock(cur);
-              if (n2.version != version) { fully_consumed = false; goto stream_done; }
-              cur = n2.idx;
-            }
-          }
-          goto stream_done;
-        }
+    // Skip key blocks
+    {
+      u32 key_rem = bl.klen;
+      while (key_rem >= blk_sz) {
+        CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
+        if (nxt.version != version) { fully_consumed = false; goto stream_done; }
+        cur     = nxt.idx;
+        key_rem -= blk_sz;
       }
-    }
-    catch (...) {
-      s_cs.decReadersOrDel(vi);
-      throw;
+      // Partial key in this block — value starts at offset key_rem
+      u32 val_in_first = blk_sz - bl.klen % blk_sz;
+      if (bl.klen % blk_sz != 0) {
+        u32 chunk_len = val_in_first < vlen ? val_in_first : vlen;
+        const void* ptr = s_cs.blockFreePtr(cur) + (bl.klen % blk_sz);
+        if (!cb(ptr, chunk_len)) { fully_consumed = false; goto stream_done; }
+        u32 consumed = chunk_len;
+        if (consumed >= vlen) goto stream_done;
+        CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
+        if (nxt.version != version) { fully_consumed = false; goto stream_done; }
+        cur = nxt.idx;
+        u32 remaining = vlen - consumed;
+        while (remaining > 0 && cur != CncrStr::LIST_END) {
+          u32 clen = remaining < blk_sz ? remaining : blk_sz;
+          const void* p = s_cs.blockFreePtr(cur);
+          if (!cb(p, clen)) { fully_consumed = false; goto stream_done; }
+          remaining -= clen;
+          if (remaining > 0) {
+            CncrStr::VerIdx n2 = s_cs.nxtBlock(cur);
+            if (n2.version != version) { fully_consumed = false; goto stream_done; }
+            cur = n2.idx;
+          }
+        }
+        goto stream_done;
+      }
     }
 
     // Key occupied whole blocks — value starts at the beginning of cur

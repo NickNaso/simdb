@@ -9,7 +9,8 @@ class SimdbStreamTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Create a unique DB for testing
-        std::string dbName = "simdb_stream_test_" + std::to_string(testing::UnitTest::GetInstance()->random_seed());
+        const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
+        std::string dbName = std::string("simdb_stream_test_") + test_info->test_suite_name() + "_" + test_info->name();
         db = std::make_unique<simdb>(dbName.c_str(), 4096, 4096);
     }
 
@@ -100,7 +101,8 @@ TEST_F(SimdbStreamTest, ExplicitAbort) {
 TEST_F(SimdbStreamTest, BackpressurePoolEmpty) {
     // Create a very small DB: blockSize=64, blockCount=5
     // Each allocation will take at least 1 block for key + some for value
-    std::string dbName = "simdb_stream_small_" + std::to_string(testing::UnitTest::GetInstance()->random_seed());
+    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
+    std::string dbName = std::string("simdb_stream_small_") + test_info->test_suite_name() + "_" + test_info->name();
     simdb small_db(dbName.c_str(), 64, 5);
     
     // Fill up the DB with regular puts

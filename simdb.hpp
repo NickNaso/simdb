@@ -1105,12 +1105,7 @@ public:
         s_bls[cur].idx = LIST_END;
         s_cl.s_lv[cur] = LIST_END;
         if (tail != LIST_END) {
-          // find the real end of the tail chain so free(st,en) works
-          u32 tailEnd = tail;
-          while (s_bls[tailEnd].idx != LIST_END) {
-            tailEnd = s_bls[tailEnd].idx;
-          }
-          s_cl.free(tail, tailEnd);
+          doFree(tail);
         }
         // update the head BlkLst length
         s_bls[blkIdx].len = total_needed;

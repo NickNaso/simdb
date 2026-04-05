@@ -2353,7 +2353,7 @@ public:
   /// @param key   Key to look up.
   /// @param cb    Callable with signature `bool(const void* chunk, u32 len)`.
   /// @returns true if the key was found and the callback consumed all chunks,
-  ///          false if the key was not found, the callback returned false, or the entry was replaced/invalidated before readers were locked.
+  ///          false if the key was not found or the callback returned false.
   template<typename Callback>
   bool read_stream(str const& key, Callback&& cb) const
   {
@@ -2374,15 +2374,19 @@ public:
     CncrStr::BlkLst bl = s_cs.incReaders(vi.idx);
     if (bl.len == 0) return false;
 
+    struct ReaderGuard {
+      CncrStr const& cs;
+      u32 idx;
+      ~ReaderGuard() { cs.decReadersOrDel(idx, false); }
+    } guard{s_cs, vi.idx};
+
     auto match_res = s_cs.compare(vi.idx, bl.version, key.data(), klen, hash);
     if (match_res != MATCH_TRUE && match_res != MATCH_TRUE_WRONG_VERSION) {
-      s_cs.decReadersOrDel(vi.idx, false);
       return false;
     }
 
     const u32 vlen   = bl.len - bl.klen;
     if (vlen == 0) {
-      s_cs.decReadersOrDel(vi.idx, false);
       return true;
     }
 
@@ -2445,7 +2449,6 @@ public:
     }
 
   stream_done:
-    s_cs.decReadersOrDel(vi.idx, false);
     return fully_consumed;
   }
 

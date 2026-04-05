@@ -85,6 +85,7 @@ db.read_stream("binary_payload", [](const void* data, uint32_t len) {
 ```
 This is the **Streaming API** providing a way to handle multi-megabyte binaries without forcing them entirely into RAM up front, managing lock-free concurrency and zero-copy reads correctly.
 
+> **Important**: `simdb` move construction and move assignment are explicitly disabled to enforce stream safety. The parent `simdb` instance must be kept at a stable address and must outlive any active `WriteStream` pointing to it.
 
 *Inside simdb.hpp there is a more extensive explanation of the inner working and how it achieves lock free concurrency*
 

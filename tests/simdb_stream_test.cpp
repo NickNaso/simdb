@@ -26,9 +26,9 @@ TEST_F(SimdbStreamTest, RoundTripBase) {
     std::string payload = "Hello, streaming world!";
     
     // Write
-    auto ws = db->begin_write(key, payload.size());
+    auto ws = db->begin_write(key, static_cast<uint32_t>(payload.size()));
     ASSERT_TRUE(ws.valid());
-    EXPECT_TRUE(ws.write(payload.data(), payload.size()));
+    EXPECT_TRUE(ws.write(payload.data(), static_cast<uint32_t>(payload.size())));
     EXPECT_TRUE(ws.commit());
 
     // Verify it's not empty and regular get works
@@ -54,9 +54,9 @@ TEST_F(SimdbStreamTest, CommitWithTrim) {
     auto ws = db->begin_write(key, oversized_alloc);
     ASSERT_TRUE(ws.valid());
     
-    EXPECT_TRUE(ws.write(payload.data(), payload.size()));
+    EXPECT_TRUE(ws.write(payload.data(), static_cast<uint32_t>(payload.size())));
     // Commit only the written part, automatically trimming
-    EXPECT_TRUE(ws.commit(payload.size()));
+    EXPECT_TRUE(ws.commit(static_cast<uint32_t>(payload.size())));
 
     // Verify size
     uint32_t vlen = 0;
@@ -71,9 +71,9 @@ TEST_F(SimdbStreamTest, AbortDoesNotMakeEntryVisible) {
     std::string payload = "secret_data";
     
     {
-        auto ws = db->begin_write(key, payload.size());
+        auto ws = db->begin_write(key, static_cast<uint32_t>(payload.size()));
         ASSERT_TRUE(ws.valid());
-        ws.write(payload.data(), payload.size());
+        ws.write(payload.data(), static_cast<uint32_t>(payload.size()));
         // ws goes out of scope here -> abort() is called
     }
 
@@ -86,9 +86,9 @@ TEST_F(SimdbStreamTest, ExplicitAbort) {
     std::string key = "abort_key_exp";
     std::string payload = "secret_data2";
     
-    auto ws = db->begin_write(key, payload.size());
+    auto ws = db->begin_write(key, static_cast<uint32_t>(payload.size()));
     ASSERT_TRUE(ws.valid());
-    ws.write(payload.data(), payload.size());
+    ws.write(payload.data(), static_cast<uint32_t>(payload.size()));
     ws.abort();
     
     // Commit should fail now
@@ -137,11 +137,11 @@ TEST_F(SimdbStreamTest, MultipleChunks) {
         expected += c;
     }
 
-    auto ws = db->begin_write(key, total_size);
+    auto ws = db->begin_write(key, static_cast<uint32_t>(total_size));
     ASSERT_TRUE(ws.valid());
     
     for (const auto& c : chunks) {
-        EXPECT_TRUE(ws.write(c.data(), c.size()));
+        EXPECT_TRUE(ws.write(c.data(), static_cast<uint32_t>(c.size())));
     }
     EXPECT_TRUE(ws.commit());
 
@@ -184,7 +184,7 @@ TEST_F(SimdbStreamTest, LargeBinaryData) {
         data[i] = static_cast<uint8_t>(i % 256 ^ (i >> 8));
     }
 
-    auto ws = db->begin_write(key, data.size());
+    auto ws = db->begin_write(key, static_cast<uint32_t>(data.size()));
     ASSERT_TRUE(ws.valid());
     
     // Write in 64KB chunks
@@ -192,7 +192,7 @@ TEST_F(SimdbStreamTest, LargeBinaryData) {
     size_t written = 0;
     while (written < data.size()) {
         size_t to_write = std::min(chunk_size, data.size() - written);
-        EXPECT_TRUE(ws.write(data.data() + written, to_write));
+        EXPECT_TRUE(ws.write(data.data() + written, static_cast<uint32_t>(to_write)));
         written += to_write;
     }
     EXPECT_TRUE(ws.commit());

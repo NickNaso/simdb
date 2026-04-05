@@ -2103,10 +2103,13 @@ public:
   /// destructor releases the blocks without making the entry visible.
   ///
   /// ### Backpressure
-  /// Backpressure occurs only at begin_write(): if the pool is full,
+  /// Backpressure can occur at begin_write(): if the block pool is full,
   /// valid() returns false and no write/commit should be attempted.
-  /// Individual write() calls cannot fail for space reasons because the
-  /// blocks have already been reserved.
+  /// Individual write() calls cannot fail for block-space reasons because
+  /// the blocks have already been reserved. However, callers must still
+  /// handle commit() failure even after a successful begin_write(), because
+  /// publishing the entry to the hash table can fail (for example, if the
+  /// hash table is saturated).
   ///
   /// ### Thread safety
   /// A WriteStream must NOT be shared between threads. It is a single-owner,

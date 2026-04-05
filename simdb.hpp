@@ -2380,7 +2380,7 @@ public:
   bool read_stream(str const& key, Callback&& cb) const
   {
     static_assert(
-      std::is_convertible<typename std::result_of<Callback(const void*, uint32_t)>::type, bool>::value,
+      std::is_convertible<decltype(std::declval<Callback>()(nullptr, 0)), bool>::value,
       "read_stream callback must have signature: bool(const void*, uint32_t)");
 
     const u32 klen = static_cast<u32>(key.length());

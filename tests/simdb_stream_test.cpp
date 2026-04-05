@@ -126,7 +126,7 @@ TEST_F(SimdbStreamTest, MultipleChunks) {
         "chunk1_",
         "chunk2_is_longer_",
         "c3",
-        std::string(2000, 'x') // force across blocks (1024 block size)
+        std::string(5000, 'x') // force across blocks with the fixture's 4096-byte block size
     };
     
     uint32_t total_size = 0;

@@ -1873,10 +1873,20 @@ public:
   }
   ~simdb(){ close(); }
 
-  /// The simdb instance MUST cleanly outlive the WriteStream. To prevent
-  /// the stream from ever observing a moved-from parent and retaining a
-  /// dangling pointer, simdb move construction and move assignment are
-  /// explicitly disabled.
+  /// The simdb instance MUST cleanly outlive the WriteStream.
+  ///
+  /// API compatibility note:
+  /// Move construction and move assignment are intentionally disabled for
+  /// simdb. This is a breaking change for downstream code that returns
+  /// simdb by value or stores it in movable containers such as std::vector.
+  ///
+  /// The reason is stream safety: WriteStream depends on the parent simdb
+  /// object remaining at a stable address for the full stream lifetime. If
+  /// simdb were moved, an existing WriteStream could retain a pointer to a
+  /// moved-from object and later observe a dangling parent.
+  ///
+  /// Callers should therefore keep simdb instances at a stable address and
+  /// ensure all WriteStream instances are destroyed before the simdb object.
   simdb(simdb&&) = delete;
   simdb& operator=(simdb&&) = delete;
 

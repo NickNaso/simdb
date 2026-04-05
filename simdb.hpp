@@ -1873,8 +1873,12 @@ public:
   }
   ~simdb(){ close(); }
 
-  simdb(simdb&& rval){ mv(std::move(rval)); }
-  simdb& operator=(simdb&& rval){ mv(std::move(rval)); return *this; }
+  /// The simdb instance MUST cleanly outlive the WriteStream. To prevent
+  /// the stream from ever observing a moved-from parent and retaining a
+  /// dangling pointer, simdb move construction and move assignment are
+  /// explicitly disabled.
+  simdb(simdb&&) = delete;
+  simdb& operator=(simdb&&) = delete;
 
   i64          len(const void *const key, u32 klen, u32* out_vlen=nullptr, u32* out_version=nullptr) const
   {

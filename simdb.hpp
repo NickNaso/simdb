@@ -2347,7 +2347,7 @@ public:
   /// @param key   Key to look up.
   /// @param cb    Callable with signature `bool(const void* chunk, u32 len)`.
   /// @returns true if the key was found and the callback consumed all chunks,
-  ///          false if the key was not found, the callback returned false, or the entry was replaced mid-read.
+  ///          false if the key was not found, the callback returned false, or the entry was replaced/invalidated before readers were locked.
   template<typename Callback>
   bool read_stream(str const& key, Callback&& cb) const
   {

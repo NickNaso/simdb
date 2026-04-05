@@ -65,6 +65,23 @@ bool    ok = db.get( lf.data(), (u32)lf.length(), (void*)way.data(), (u32)way.le
 Here we can see the fundamental functions used to interface with the db. An arbitrary bytes buffer is given for the key and another for the value.  Keep in mind here that get() can fail, since another thread can delete or change the key being read between the call to len() (which gets the number of bytes held in the value of the given key) and the call to get().
 Not shown is del(), which will take a key and delete it.
 
+```cpp
+auto ws = db.begin_write("binary_payload", 5 * 1024 * 1024); // 5MB limit
+if (ws.valid()) {
+    while(auto chunk = get_next_buffer()) {
+        ws.write(chunk.data(), chunk.size());
+    }
+    ws.commit(); // Memory entry made visible cross-process atomically
+}
+
+// Memory zero-copy readout:
+db.read_stream("binary_payload", [](const void* data, uint32_t len) {
+    write_to_disk_or_network(data, len); // Bypass intermediate buffers!
+    return true; 
+});
+```
+This is the **Streaming API** providing a way to handle multi-megabyte binaries without forcing them entirely into RAM up front, managing lock-free concurrency and zero-copy reads correctly.
+
 
 *Inside simdb.hpp there is a more extensive explanation of the inner working and how it achieves lock free concurrency*
 

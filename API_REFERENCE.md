@@ -107,6 +107,33 @@ i64 len(const void* const key, u32 klen, u32* out_vlen=nullptr, u32* out_version
 
 ---
 
+## Streaming Operations
+
+To support extremely large values, such as images or continuous byte bursts, without exhausting application memory, `simdb` offers a low-level chunk-based streaming API.
+
+### `simdb::WriteStream` (RAII)
+Handles writing payload sequences sequentially. Obtain this structured handle via `begin_write`.
+- **`valid()`**: `bool` – Validates if the internal map had enough overall capacity to allocate your stream.
+- **`write(const void*, u32)`**: `bool` – Copies chunks directly into the memory blocks. Returns `false` if exceeding the `max_value_bytes` supplied to `begin_write`.
+- **`commit(u32 committed_bytes = 0)`**: `bool` – Makes the fully populated data visibly atomic inside the Hash table. If you pass `committed_bytes` less than your initial request, the excess blocks are returned to the pool efficiently.
+- **`abort()`**: `void` – Trashes the pre-allocated structures without exposing them to other processes. Triggers automatically on destruction if `commit` wasn't invoked.
+
+### `begin_write(...)`
+Atomically configure space for a contiguous stream sequence without applying table access constraints. Data written remains strictly invisible cross-process until explicitly committed. Be careful to check `valid()` before writing. 
+```cpp
+[[nodiscard]] WriteStream begin_write(str const& key, u32 max_value_bytes);
+```
+
+### `read_stream(...)`
+Extracts payloads dynamically as zero-copy chunks utilizing an injection callback. Recommended strictly for immediate consumption pipelines like disk writes or networking outputs where you want to minimize `simdb` memory cloning. Iteration will cleanly bail if your callback evaluates to `false`.
+```cpp
+template<typename Callback>
+bool read_stream(str const& key, Callback&& cb) const;
+// Expected Callback: bool(const void* chunk, uint32_t len)
+```
+
+---
+
 ## Iterators and Utility
 
 ### `getKeyStrs()`

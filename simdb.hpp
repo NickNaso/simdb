@@ -197,8 +197,8 @@
 #endif
 
 //#ifndef NDEBUG
-  thread_local int __simdb_allocs   = 0;
-  thread_local int __simdb_deallocs = 0;
+  inline thread_local int __simdb_allocs   = 0;
+  inline thread_local int __simdb_deallocs = 0;
 //#endif
 
 namespace {
@@ -1084,6 +1084,45 @@ public:
   auto         data()      const -> const void* { return (void*)s_blksAddr; }
   auto       blkLst(u32 i) const -> BlkLst { return s_bls[i]; }
 
+  // Trim the block chain starting at blkIdx so that it holds at most
+  // committed_bytes of value data (i.e. total = klen + committed_bytes).
+  // Excess tail blocks are returned to the free list.
+  // Called by WriteStream::commit() when actual data < reserved capacity.
+  void    trim_blocks(u32 blkIdx, u32 klen, u32 committed_bytes) const
+  {
+    const u32 total_needed = klen + committed_bytes;
+    const u32 blk_sz       = blockFreeSize();
+
+    // Walk forward, counting how many blocks are fully covered
+    u32 remaining = total_needed;
+    u32 cur       = blkIdx;
+    u32 prev      = blkIdx;
+
+    while (cur != LIST_END) {
+      if (remaining <= blk_sz) {
+        // cur is the last block we need; sever the chain
+        u32 tail = s_bls[cur].idx;
+        s_bls[cur].idx = LIST_END;
+        s_cl.s_lv[cur] = LIST_END;
+        if (tail != LIST_END) {
+          // find the real end of the tail chain so free(st,en) works
+          u32 tailEnd = tail;
+          while (s_bls[tailEnd].idx != LIST_END) {
+            tailEnd = s_bls[tailEnd].idx;
+          }
+          s_cl.free(tail, tailEnd);
+        }
+        // update the head BlkLst length
+        s_bls[blkIdx].len = total_needed;
+        return;
+      }
+      remaining -= blk_sz;
+      prev = cur;
+      cur  = s_bls[cur].idx;
+    }
+    // nothing to trim (committed_bytes >= original allocation)
+  }
+
   friend class CncrHsh;
 };
 class     CncrHsh
@@ -1486,6 +1525,19 @@ public:
   }
   u32         nxtIdx(u32 i) const { return (i+1)%m_sz; }
   u32        prevIdx(u32 i) const { using namespace std; return min(i-1, m_sz-1); }        // clamp to m_sz-1 for the case that hash==0, which will result in an unsigned integer wrap - syntax errors and possible windows min/max macros make this less problematic than std::min() 
+
+  /// Locate the VerIdx for a key, used by read_stream().
+  /// Returns an IsListEnd VerIdx when not found.
+  VerIdx         find(const void* const key, u32 klen, u32 hash) const
+  {
+    VerIdx result = CncrStr::List_End();
+    auto capture  = [&result](VerIdx vi) -> bool {
+      result = vi;
+      return true;
+    };
+    runMatch(key, klen, hash, capture, false);
+    return result;
+  }
 
 };
 struct  SharedMem
@@ -2045,13 +2097,316 @@ public:
   {    
     return put(key.data(), (u32)key.length(), val.data(), (u32)(val.size()*sizeof(T)) );
   }
+
+  // -----------------------------------------------------------------------
+  // Streaming API
+  // -----------------------------------------------------------------------
+
+  /// @brief RAII handle for incremental, chunk-based writes to a single key.
+  ///
+  /// Obtained via simdb::begin_write(). The allocated blocks remain invisible
+  /// (not in the hash table) until commit() is called. abort() or the
+  /// destructor releases the blocks without making the entry visible.
+  ///
+  /// ### Backpressure
+  /// Backpressure occurs only at begin_write(): if the pool is full,
+  /// valid() returns false and no write/commit should be attempted.
+  /// Individual write() calls cannot fail for space reasons because the
+  /// blocks have already been reserved.
+  ///
+  /// ### Thread safety
+  /// A WriteStream must NOT be shared between threads. It is a single-owner,
+  /// single-writer object. The underlying blocks are invisible to all other
+  /// threads until commit().
+  class WriteStream {
+  public:
+    WriteStream() noexcept = default;
+
+    WriteStream(WriteStream&& other) noexcept
+      : m_db(other.m_db), m_start_blk(other.m_start_blk), m_vi(other.m_vi),
+        m_klen(other.m_klen), m_value_capacity(other.m_value_capacity),
+        m_hash(other.m_hash), m_key(std::move(other.m_key)),
+        m_byte_offset(other.m_byte_offset), m_written(other.m_written)
+    {
+      other.m_db = nullptr;
+    }
+
+    WriteStream& operator=(WriteStream&& other) noexcept
+    {
+      if (this != &other) {
+        abort();
+        m_db             = other.m_db;
+        m_start_blk      = other.m_start_blk;
+        m_vi             = other.m_vi;
+        m_klen           = other.m_klen;
+        m_value_capacity = other.m_value_capacity;
+        m_hash           = other.m_hash;
+        m_key            = std::move(other.m_key);
+        m_byte_offset    = other.m_byte_offset;
+        m_written        = other.m_written;
+        other.m_db       = nullptr;
+      }
+      return *this;
+    }
+
+    WriteStream(const WriteStream&)            = delete;
+    WriteStream& operator=(const WriteStream&) = delete;
+
+    ~WriteStream() { abort(); }
+
+    /// Returns false if the pool was full at construction time.
+    [[nodiscard]] bool valid() const noexcept { return m_db != nullptr; }
+
+    /// Write up to (max_value_bytes - already_written) bytes.
+    /// Returns false if the write would exceed the reserved capacity.
+    bool write(const void* data, u32 len) noexcept
+    {
+      if (!valid()) return false;
+      if (m_written + len > m_value_capacity) return false;
+
+      CncrStr*  cs     = &m_db->s_cs;
+      const u32 blk_sz = cs->blockFreeSize();
+
+      const u8* src = static_cast<const u8*>(data);
+      u32       rem = len;
+
+      // m_byte_offset tracks absolute offset from block-list start (incl. key)
+      while (rem > 0) {
+        const u32 blk_off = m_byte_offset % blk_sz;
+
+        // Walk to the correct block each chunk (simple; key is short)
+        u32 blks_to_skip = m_byte_offset / blk_sz;
+        u32 cur = m_start_blk;
+        for (u32 i = 0; i < blks_to_skip; ++i) {
+          cur = cs->s_bls[cur].idx;
+        }
+
+        const u32 space_in_blk = blk_sz - blk_off;
+        const u32 to_copy      = rem < space_in_blk ? rem : space_in_blk;
+
+        cs->writeBlock(cur, src, to_copy, blk_off);
+
+        src           += to_copy;
+        rem           -= to_copy;
+        m_byte_offset += to_copy;
+        m_written     += to_copy;
+      }
+      return true;
+    }
+
+    /// Make the entry visible in the hash table.
+    /// @param committed_bytes  Actual value bytes to commit.
+    ///   - 0 (default) → commit all written bytes.
+    ///   - < written   → trim tail blocks, commit only committed_bytes.
+    ///   - > written   → clamped to written bytes.
+    /// @returns true on success, false if the stream is already invalid.
+    bool commit(u32 committed_bytes = 0) noexcept
+    {
+      if (!valid()) return false;
+
+      const u32 actual = (committed_bytes == 0 || committed_bytes > m_written)
+                         ? m_written : committed_bytes;
+
+      // Release unused tail blocks when we over-allocated
+      if (actual < m_value_capacity) {
+        m_db->s_cs.trim_blocks(m_start_blk, m_klen, actual);
+      }
+
+      // Insert atomically into the hash table (same as CncrHsh::put does)
+      VerIdx old = m_db->s_ch.putHashed(m_hash, m_vi,
+                                         m_key.data(),
+                                         static_cast<u32>(m_key.size()));
+      // If we replaced an existing entry, free its blocks
+      if (old.idx < CncrHsh::DELETED) {
+        m_db->s_cs.free(old.idx, old.version);
+      }
+
+      m_db = nullptr;   // prevent abort() in destructor
+      return true;
+    }
+
+    /// Release blocks without making the entry visible.
+    void abort() noexcept
+    {
+      if (!valid()) return;
+      m_db->s_cs.free(m_start_blk, m_vi.version);
+      m_db = nullptr;
+    }
+
+  private:
+    friend class simdb;
+
+    WriteStream(simdb* db, u32 start_blk, VerIdx vi,
+                u32 klen, u32 value_capacity,
+                u32 hash, std::string key) noexcept
+      : m_db(db),
+        m_start_blk(start_blk),
+        m_vi(vi),
+        m_klen(klen),
+        m_value_capacity(value_capacity),
+        m_hash(hash),
+        m_key(std::move(key)),
+        m_byte_offset(klen),   // key already written; value begins here
+        m_written(0)
+    {}
+
+    simdb*       m_db             {nullptr};
+    u32          m_start_blk      {0};
+    VerIdx       m_vi             {};
+    u32          m_klen           {0};
+    u32          m_value_capacity {0};
+    u32          m_hash           {0};
+    std::string  m_key            {};
+    u32          m_byte_offset    {0};   // absolute offset from block-list head
+    u32          m_written        {0};   // value bytes written so far
+  };
+
+  /// @brief Reserve blocks for a streaming write to the given key.
+  ///
+  /// The entry is NOT visible to other threads until WriteStream::commit().
+  /// If the pool is full, the returned WriteStream has valid() == false.
+  ///
+  /// @param key              Key string (copied internally).
+  /// @param max_value_bytes  Worst-case value size to pre-allocate.
+  ///                         commit() can release unused tail blocks.
+  /// @returns A WriteStream. Check valid() before calling write()/commit().
+  [[nodiscard]] WriteStream begin_write(str const& key, u32 max_value_bytes)
+  {
+    assert(m_isOpen);
+    const u32 klen  = static_cast<u32>(key.length());
+    const u32 total = klen + max_value_bytes;
+    const u32 hash  = CncrHsh::HashBytes(key.data(), klen);
+
+    // Allocate blocks — invisible until putHashed() at commit time
+    VerIdx vi = s_cs.alloc(total, klen, hash);
+    if (vi.idx == CncrStr::LIST_END) {
+      m_error = simdb_error::OUT_OF_SPACE;
+      return WriteStream{};
+    }
+
+    // Write the key portion into the allocated blocks safely
+    {
+      u32 cur_blk = vi.idx;
+      u32 rem_klen = klen;
+      const u8* ksrc = reinterpret_cast<const u8*>(key.data());
+      const u32 blk_sz = s_cs.blockFreeSize();
+      while (rem_klen > 0) {
+        u32 to_copy = rem_klen < blk_sz ? rem_klen : blk_sz;
+        s_cs.writeBlock(cur_blk, ksrc, to_copy, 0);
+        ksrc += to_copy;
+        rem_klen -= to_copy;
+        if (rem_klen > 0) cur_blk = s_cs.nxtBlock(cur_blk).idx;
+      }
+    }
+
+    return WriteStream{this, vi.idx, vi, klen, max_value_bytes, hash, key};
+  }
+
+  /// @brief Read-stream: deliver a value in block-granularity chunks to a
+
+  ///        zero-copy callback, without materialising the full value.
+  ///
+  /// The callback receives pointers directly into the shared-memory blocks.
+  /// Returning false from the callback stops the iteration early.
+  ///
+  /// @param key   Key to look up.
+  /// @param cb    Callable with signature `bool(const void* chunk, u32 len)`.
+  /// @returns true if the key was found and the callback consumed all chunks,
+  ///          false if the key was not found or the callback returned false.
+  template<typename Callback>
+  bool read_stream(str const& key, Callback&& cb) const
+  {
+    static_assert(
+      std::is_invocable_r_v<bool, Callback, const void*, uint32_t>,
+      "read_stream callback must have signature: bool(const void*, uint32_t)");
+
+    const u32 klen = static_cast<u32>(key.length());
+    const u32 hash = CncrHsh::HashBytes(key.data(), klen);
+
+    // Locate the block-list head via the hash table
+    VerIdx vi = s_ch.find(key.data(), klen, hash);
+    if (vi.idx == CncrStr::LIST_END || CncrHsh::IsEmpty(vi)) return false;
+
+    // Increment readers to prevent deletion while we iterate
+    CncrStr::BlkLst bl = s_cs.incReaders(vi.idx);
+    if (bl.len == 0) return false;
+
+    const u32 vlen   = bl.len - bl.klen;
+    if (vlen == 0) {
+      s_cs.decReadersOrDel(vi.idx, false);
+      return true;
+    }
+
+    const u32 blk_sz = s_cs.blockFreeSize();
+    u32 cur          = vi.idx;
+    u32 version      = vi.version;
+
+    bool fully_consumed = true;
+
+    // Skip key blocks
+    {
+      u32 key_rem = bl.klen;
+      while (key_rem >= blk_sz) {
+        CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
+        if (nxt.version != version) goto stream_done;
+        cur     = nxt.idx;
+        key_rem -= blk_sz;
+      }
+      // Partial key in this block — value starts at offset key_rem
+      u32 val_in_first = blk_sz - bl.klen % blk_sz;
+      if (bl.klen % blk_sz != 0) {
+        u32 chunk_len = val_in_first < vlen ? val_in_first : vlen;
+        const void* ptr = s_cs.blockFreePtr(cur) + (bl.klen % blk_sz);
+        if (!cb(ptr, chunk_len)) { fully_consumed = false; goto stream_done; }
+        u32 consumed = chunk_len;
+        if (consumed >= vlen) goto stream_done;
+        CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
+        if (nxt.version != version) goto stream_done;
+        cur = nxt.idx;
+        u32 remaining = vlen - consumed;
+        while (remaining > 0 && cur != CncrStr::LIST_END) {
+          u32 clen = remaining < blk_sz ? remaining : blk_sz;
+          const void* p = s_cs.blockFreePtr(cur);
+          if (!cb(p, clen)) { fully_consumed = false; goto stream_done; }
+          remaining -= clen;
+          if (remaining > 0) {
+            CncrStr::VerIdx n2 = s_cs.nxtBlock(cur);
+            if (n2.version != version) goto stream_done;
+            cur = n2.idx;
+          }
+        }
+        goto stream_done;
+      }
+    }
+
+    // Key occupied whole blocks — value starts at the beginning of cur
+    {
+      u32 remaining = vlen;
+      while (remaining > 0 && cur != CncrStr::LIST_END) {
+        u32 clen = remaining < blk_sz ? remaining : blk_sz;
+        const void* p = s_cs.blockFreePtr(cur);
+        if (!cb(p, clen)) { fully_consumed = false; goto stream_done; }
+        remaining -= clen;
+        if (remaining > 0) {
+          CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
+          if (nxt.version != version) goto stream_done;
+          cur = nxt.idx;
+        }
+      }
+    }
+
+  stream_done:
+    s_cs.decReadersOrDel(vi.idx, false);
+    return fully_consumed;
+  }
+
   // end separated C++ functions
 
 };
 
 // simdb_listDBs()
 #ifdef _WIN32
-  [[nodiscard]] auto simdb_listDBs(simdb_error* error_code=nullptr) -> std::vector<std::string>
+  [[nodiscard]] inline auto simdb_listDBs(simdb_error* error_code=nullptr) -> std::vector<std::string>
   {
     using namespace std;
 
@@ -2133,7 +2488,7 @@ public:
     return ret;
   }
 #else
-  [[nodiscard]] auto simdb_listDBs(simdb_error* error_code=nullptr) -> std::vector<std::string>
+  [[nodiscard]] inline auto simdb_listDBs(simdb_error* error_code=nullptr) -> std::vector<std::string>
   {
     using namespace std;
 

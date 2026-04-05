@@ -2196,7 +2196,7 @@ public:
     ///   - 0 (default) → commit all written bytes.
     ///   - < written   → trim tail blocks, commit only committed_bytes.
     ///   - > written   → clamped to written bytes.
-    /// @returns true on success, false if the stream is already invalid.
+    /// @returns true on success; false if the stream is invalid, or if hash-table publication fails (setting error() appropriately).
     bool commit(u32 committed_bytes = 0) noexcept
     {
       if (!valid()) return false;

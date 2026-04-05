@@ -2163,7 +2163,8 @@ public:
     bool write(const void* data, u32 len) noexcept
     {
       if (!valid()) return false;
-      if (m_written + len > m_value_capacity) return false;
+      if (m_written > m_value_capacity) return false;
+      if (len > (m_value_capacity - m_written)) return false;
 
       CncrStr*  cs     = &m_db->s_cs;
       const u32 blk_sz = cs->blockFreeSize();

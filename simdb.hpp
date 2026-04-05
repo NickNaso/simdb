@@ -2305,6 +2305,9 @@ public:
     const u32 total = klen + max_value_bytes;
     const u32 hash  = CncrHsh::HashBytes(key.data(), klen);
 
+    // Copy the key *before* allocation to avoid leaking blocks if std::string throws bad_alloc
+    std::string safe_key = key;
+
     // Allocate blocks — invisible until putHashed() at commit time
     VerIdx vi = s_cs.alloc(total, klen, hash);
     if (vi.idx == CncrStr::LIST_END) {
@@ -2318,7 +2321,7 @@ public:
     {
       u32 cur_blk = vi.idx;
       u32 rem_klen = klen;
-      const u8* ksrc = reinterpret_cast<const u8*>(key.data());
+      const u8* ksrc = reinterpret_cast<const u8*>(safe_key.data());
       const u32 blk_sz = s_cs.blockFreeSize();
       while (rem_klen > 0) {
         u32 to_copy = rem_klen < blk_sz ? rem_klen : blk_sz;
@@ -2329,7 +2332,7 @@ public:
       }
     }
 
-    return WriteStream{this, vi.idx, vi, klen, max_value_bytes, hash, key};
+    return WriteStream{this, vi.idx, vi, klen, max_value_bytes, hash, std::move(safe_key)};
   }
 
   /// @brief Read-stream: deliver a value in block-granularity chunks to a

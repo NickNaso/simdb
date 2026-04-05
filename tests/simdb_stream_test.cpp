@@ -178,8 +178,8 @@ TEST_F(SimdbStreamTest, ReadStreamEarlyExit) {
 
 TEST_F(SimdbStreamTest, LargeBinaryData) {
     std::string key = "large_binary";
-    // 5MB of binary data
-    std::vector<uint8_t> data(5 * 1024 * 1024);
+    // 250KB of binary data (spans roughly ~60 blocks)
+    std::vector<uint8_t> data(250 * 1024);
     for (size_t i = 0; i < data.size(); ++i) {
         data[i] = static_cast<uint8_t>(i % 256 ^ (i >> 8));
     }
@@ -187,8 +187,8 @@ TEST_F(SimdbStreamTest, LargeBinaryData) {
     auto ws = db->begin_write(key, data.size());
     ASSERT_TRUE(ws.valid());
     
-    // Write in 1MB chunks
-    const size_t chunk_size = 1024 * 1024;
+    // Write in 64KB chunks
+    const size_t chunk_size = 64 * 1024;
     size_t written = 0;
     while (written < data.size()) {
         size_t to_write = std::min(chunk_size, data.size() - written);

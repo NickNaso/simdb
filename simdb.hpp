@@ -2366,7 +2366,7 @@ public:
     CncrStr::BlkLst bl = s_cs.incReaders(vi.idx);
     if (bl.len == 0) return false;
 
-    if (bl.version != vi.version || s_cs.compare(vi.idx, vi.version, key.data(), klen, hash) != MATCH_TRUE) {
+    if (s_cs.compare(vi.idx, bl.version, key.data(), klen, hash) != MATCH_TRUE) {
       s_cs.decReadersOrDel(vi.idx, false);
       return false;
     }
@@ -2379,7 +2379,7 @@ public:
 
     const u32 blk_sz = s_cs.blockFreeSize();
     u32 cur          = vi.idx;
-    u32 version      = vi.version;
+    u32 version      = bl.version;
 
     bool fully_consumed = true;
 

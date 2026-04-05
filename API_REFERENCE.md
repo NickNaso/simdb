@@ -113,13 +113,13 @@ To support extremely large values, such as images or continuous byte bursts, wit
 
 ### `simdb::WriteStream` (RAII)
 Handles writing payload sequences sequentially. Obtain this structured handle via `begin_write`.
-- **`valid()`**: `bool` – Validates if the internal map had enough overall capacity to allocate your stream.
+- **`valid()`**: `bool` – Validates that the internal map had enough block-pool capacity to allocate the stream buffer. This does **not** guarantee that `commit()` will succeed.
 - **`write(const void*, u32)`**: `bool` – Copies chunks directly into the memory blocks. Returns `false` if exceeding the `max_value_bytes` supplied to `begin_write`.
-- **`commit(u32 committed_bytes = 0)`**: `bool` – Makes the fully populated data visibly atomic inside the Hash table. If you pass `committed_bytes` less than your initial request, the excess blocks are returned to the pool efficiently.
+- **`commit(u32 committed_bytes = 0)`**: `bool` – Attempts to publish the fully populated data atomically inside the Hash table. This can still return `false` even when `valid()` was `true`, for example if the stream was allocated successfully but the Hash table cannot accept the new entry during publication. If you pass `committed_bytes` less than your initial request, the excess blocks are returned to the pool efficiently.
 - **`abort()`**: `void` – Trashes the pre-allocated structures without exposing them to other processes. Triggers automatically on destruction if `commit` wasn't invoked.
 
 ### `begin_write(...)`
-Atomically configure space for a contiguous stream sequence without applying table access constraints. Data written remains strictly invisible cross-process until explicitly committed. Be careful to check `valid()` before writing. 
+Atomically configure space for a contiguous stream sequence without applying table access constraints. Data written remains strictly invisible cross-process until explicitly committed. Be careful to check `valid()` before writing, but note that successful allocation only confirms stream/block capacity; `commit()` may still fail later if publication into the Hash table cannot be completed.
 ```cpp
 [[nodiscard]] WriteStream begin_write(str const& key, u32 max_value_bytes);
 ```

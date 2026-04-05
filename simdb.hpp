@@ -198,8 +198,15 @@
 #endif
 
 //#ifndef NDEBUG
-  inline thread_local int __simdb_allocs   = 0;
-  inline thread_local int __simdb_deallocs = 0;
+  template<typename T = void> struct simdb_dbg { 
+      static thread_local int allocs; 
+      static thread_local int deallocs; 
+  };
+  template<typename T> thread_local int simdb_dbg<T>::allocs = 0;
+  template<typename T> thread_local int simdb_dbg<T>::deallocs = 0;
+
+  #define __simdb_allocs simdb_dbg<>::allocs
+  #define __simdb_deallocs simdb_dbg<>::deallocs
 //#endif
 
 namespace {
@@ -1657,7 +1664,7 @@ public:
 
         CloseHandle(sm.fileHndl); 
         sm.clear(); 
-        return move(sm); 
+        return std::move(sm); 
       }
     #elif defined(__APPLE__) || defined(__MACH__) || defined(__unix__) || defined(__FreeBSD__) || defined(__linux__)  // osx, linux and freebsd
       sm.owner  = true; // todo: have to figure out how to detect which process is the owner
@@ -2373,7 +2380,7 @@ public:
   bool read_stream(str const& key, Callback&& cb) const
   {
     static_assert(
-      std::is_invocable_r_v<bool, Callback, const void*, uint32_t>,
+      std::is_convertible<typename std::result_of<Callback(const void*, uint32_t)>::type, bool>::value,
       "read_stream callback must have signature: bool(const void*, uint32_t)");
 
     const u32 klen = static_cast<u32>(key.length());

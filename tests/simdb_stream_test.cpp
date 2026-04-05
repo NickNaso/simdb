@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <algorithm>
 
 class SimdbStreamTest : public ::testing::Test {
 protected:

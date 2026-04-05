@@ -20,6 +20,7 @@ include(GoogleTest)
 
 add_executable(simdb_test
   tests/simdb_test.cpp
+  tests/simdb_stream_test.cpp
 )
 target_link_libraries(simdb_test simdb GTest::gtest GTest::gtest_main)
 

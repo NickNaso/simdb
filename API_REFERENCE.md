@@ -107,6 +107,37 @@ i64 len(const void* const key, u32 klen, u32* out_vlen=nullptr, u32* out_version
 
 ---
 
+## Streaming Operations
+
+To support extremely large values, such as images or continuous byte bursts, without exhausting application memory, `simdb` offers a low-level chunk-based streaming API.
+
+### `simdb::WriteStream` (RAII)
+Handles writing payload sequences sequentially. Obtain this structured handle via `begin_write`.
+> **Important**: `WriteStream` is inextricably tied to its parent `simdb` instance. To prevent dangling pointers and dangling locks, `simdb` move construction and move assignment are **explicitly disabled** (deleted). The parent `simdb` instance must remain at a stable address and cleanly outlive all its active streams.
+- **`valid()`**: `bool` – Validates that the internal map had enough block-pool capacity to allocate the stream buffer. This does **not** guarantee that `commit()` will succeed.
+- **`write(const void*, u32)`**: `bool` – Copies chunks directly into the memory blocks. Returns `false` if exceeding the `max_value_bytes` supplied to `begin_write`.
+- **`commit(u32 committed_bytes = 0)`**: `bool` – Attempts to publish the fully populated data atomically inside the Hash table. This can still return `false` even when `valid()` was `true`, for example if the stream was allocated successfully but the Hash table cannot accept the new entry during publication. If you pass `committed_bytes` less than your initial request, the excess blocks are returned to the pool efficiently.
+- **`abort()`**: `void` – Trashes the pre-allocated structures without exposing them to other processes. Triggers automatically on destruction if `commit` wasn't invoked.
+
+### `begin_write(...)`
+Atomically configure space for a contiguous stream sequence without applying table access constraints. Data written remains strictly invisible cross-process until explicitly committed. Be careful to check `valid()` before writing, but note that successful allocation only confirms stream/block capacity; `commit()` may still fail later if publication into the Hash table cannot be completed.
+```cpp
+[[nodiscard]] WriteStream begin_write(str const& key, u32 max_value_bytes);
+```
+
+### `read_stream(...)`
+Extracts payloads dynamically as zero-copy chunks utilizing an injection callback. Recommended strictly for immediate consumption pipelines like disk writes or networking outputs where you want to minimize `simdb` memory cloning. Iteration will cleanly bail if your callback evaluates to `false`.
+
+> **Note**: The `chunk` pointers provided to the callback point directly into shared map memory and are ONLY valid during the callback execution. Storing or using them after the callback returns will result in dangling pointers and invalid access.
+
+```cpp
+template<typename Callback>
+bool read_stream(str const& key, Callback&& cb) const;
+// Expected Callback: bool(const void* chunk, uint32_t len)
+```
+
+---
+
 ## Iterators and Utility
 
 ### `getKeyStrs()`

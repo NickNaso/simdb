@@ -49,7 +49,7 @@ TEST_F(SimdbStreamTest, CommitWithTrim) {
     std::string key = "trim_key";
     std::string payload = "short_value";
     
-    // Allocate 100 blocks (much more than needed)
+    // Allocate about 100 KB (much more than needed)
     uint32_t oversized_alloc = 100 * 1024;
     auto ws = db->begin_write(key, oversized_alloc);
     ASSERT_TRUE(ws.valid());

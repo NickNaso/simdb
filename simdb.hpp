@@ -2374,7 +2374,8 @@ public:
     CncrStr::BlkLst bl = s_cs.incReaders(vi.idx);
     if (bl.len == 0) return false;
 
-    if (s_cs.compare(vi.idx, bl.version, key.data(), klen, hash) != MATCH_TRUE) {
+    auto match_res = s_cs.compare(vi.idx, bl.version, key.data(), klen, hash);
+    if (match_res != MATCH_TRUE && match_res != MATCH_TRUE_WRONG_VERSION) {
       s_cs.decReadersOrDel(vi.idx, false);
       return false;
     }

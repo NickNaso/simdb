@@ -1097,7 +1097,6 @@ public:
     // Walk forward, counting how many blocks are fully covered
     u32 remaining = total_needed;
     u32 cur       = blkIdx;
-    u32 prev      = blkIdx;
 
     while (cur != LIST_END) {
       if (remaining <= blk_sz) {
@@ -1118,7 +1117,6 @@ public:
         return;
       }
       remaining -= blk_sz;
-      prev = cur;
       cur  = s_bls[cur].idx;
     }
     // nothing to trim (committed_bytes >= original allocation)
@@ -2124,12 +2122,14 @@ public:
     WriteStream() noexcept = default;
 
     WriteStream(WriteStream&& other) noexcept
-      : m_db(other.m_db), m_start_blk(other.m_start_blk), m_vi(other.m_vi),
+      : m_db(other.m_db), m_start_blk(other.m_start_blk), m_cur_blk(other.m_cur_blk),
+        m_vi(other.m_vi),
         m_klen(other.m_klen), m_value_capacity(other.m_value_capacity),
         m_hash(other.m_hash), m_key(std::move(other.m_key)),
         m_byte_offset(other.m_byte_offset), m_written(other.m_written)
     {
       other.m_db = nullptr;
+      other.m_cur_blk = 0;
     }
 
     WriteStream& operator=(WriteStream&& other) noexcept
@@ -2138,6 +2138,7 @@ public:
         abort();
         m_db             = other.m_db;
         m_start_blk      = other.m_start_blk;
+        m_cur_blk        = other.m_cur_blk;
         m_vi             = other.m_vi;
         m_klen           = other.m_klen;
         m_value_capacity = other.m_value_capacity;
@@ -2146,6 +2147,7 @@ public:
         m_byte_offset    = other.m_byte_offset;
         m_written        = other.m_written;
         other.m_db       = nullptr;
+        other.m_cur_blk  = 0;
       }
       return *this;
     }
@@ -2212,6 +2214,14 @@ public:
       VerIdx old = m_db->s_ch.putHashed(m_hash, m_vi,
                                          m_key.data(),
                                          static_cast<u32>(m_key.size()));
+
+      if (old.asInt == m_vi.asInt) {
+          // Insertion failed - hash map is likely fully loaded/hash chain full
+          m_db->m_error = simdb_error::OUT_OF_SPACE;
+          abort();
+          return false;
+      }
+
       // If we replaced an existing entry, free its blocks
       if (old.idx < CncrHsh::DELETED) {
         m_db->s_cs.free(old.idx, old.version);
@@ -2281,6 +2291,11 @@ public:
     const u32 klen  = static_cast<u32>(key.length());
     assert(klen > 0);
     if (klen < 1) {
+      return WriteStream{};
+    }
+
+    if (max_value_bytes > UINT32_MAX - klen) {
+      m_error = simdb_error::OUT_OF_SPACE;
       return WriteStream{};
     }
 

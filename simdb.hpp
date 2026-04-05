@@ -2278,17 +2278,21 @@ public:
   ///
   /// The entry is NOT visible to other threads until WriteStream::commit().
   /// If the pool is full, the returned WriteStream has valid() == false.
+  /// Empty keys are unsupported: if key.length() == 0, this returns an
+  /// invalid WriteStream and leaves error() unchanged.
   ///
-  /// @param key              Key string (copied internally).
+  /// @param key              Key string (copied internally). Must not be empty.
   /// @param max_value_bytes  Worst-case value size to pre-allocate.
   ///                         commit() can release unused tail blocks.
   /// @returns A WriteStream. Check valid() before calling write()/commit().
+  ///          On size/allocation failures, error() is updated accordingly.
   [[nodiscard]] WriteStream begin_write(str const& key, u32 max_value_bytes)
   {
     assert(m_isOpen);
     const u32 klen  = static_cast<u32>(key.length());
     assert(klen > 0);
     if (klen < 1) {
+      // Empty keys are not supported; preserve the previous error state.
       return WriteStream{};
     }
 

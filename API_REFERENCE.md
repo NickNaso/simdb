@@ -126,6 +126,9 @@ Atomically configure space for a contiguous stream sequence without applying tab
 
 ### `read_stream(...)`
 Extracts payloads dynamically as zero-copy chunks utilizing an injection callback. Recommended strictly for immediate consumption pipelines like disk writes or networking outputs where you want to minimize `simdb` memory cloning. Iteration will cleanly bail if your callback evaluates to `false`.
+
+> **Note**: The `chunk` pointers provided to the callback point directly into shared map memory and are ONLY valid during the callback execution. Storing or using them after the callback returns will result in dangling pointers and invalid access.
+
 ```cpp
 template<typename Callback>
 bool read_stream(str const& key, Callback&& cb) const;

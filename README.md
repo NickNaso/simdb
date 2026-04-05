@@ -68,10 +68,13 @@ Not shown is del(), which will take a key and delete it.
 ```cpp
 auto ws = db.begin_write("binary_payload", 5 * 1024 * 1024); // 5MB limit
 if (ws.valid()) {
+    bool ok = true;
     while(auto chunk = get_next_buffer()) {
-        ws.write(chunk.data(), chunk.size());
+        if (!ws.write(chunk.data(), chunk.size())) { ok = false; break; }
     }
-    ws.commit(); // Memory entry made visible cross-process atomically
+    if (ok) {
+        if (!ws.commit()) { /* handle commit failure */ }
+    }
 }
 
 // Memory zero-copy readout:

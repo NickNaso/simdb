@@ -186,6 +186,7 @@
 #include <set>
 #include <algorithm>
 #include <cassert>
+#include <type_traits>
 
 // platform specific type definitions
 #ifdef _WIN32                         // these have to be outside the anonymous namespace
@@ -2170,26 +2171,21 @@ public:
       const u8* src = static_cast<const u8*>(data);
       u32       rem = len;
 
-      // m_byte_offset tracks absolute offset from block-list start (incl. key)
       while (rem > 0) {
         const u32 blk_off = m_byte_offset % blk_sz;
-
-        // Walk to the correct block each chunk (simple; key is short)
-        u32 blks_to_skip = m_byte_offset / blk_sz;
-        u32 cur = m_start_blk;
-        for (u32 i = 0; i < blks_to_skip; ++i) {
-          cur = cs->s_bls[cur].idx;
-        }
-
         const u32 space_in_blk = blk_sz - blk_off;
         const u32 to_copy      = rem < space_in_blk ? rem : space_in_blk;
 
-        cs->writeBlock(cur, src, to_copy, blk_off);
+        cs->writeBlock(m_cur_blk, src, to_copy, blk_off);
 
         src           += to_copy;
         rem           -= to_copy;
         m_byte_offset += to_copy;
         m_written     += to_copy;
+
+        if (to_copy == space_in_blk && rem > 0) {
+          m_cur_blk = cs->s_bls[m_cur_blk].idx;
+        }
       }
       return true;
     }
@@ -2241,6 +2237,7 @@ public:
                 u32 hash, std::string key) noexcept
       : m_db(db),
         m_start_blk(start_blk),
+        m_cur_blk(start_blk),
         m_vi(vi),
         m_klen(klen),
         m_value_capacity(value_capacity),
@@ -2248,10 +2245,18 @@ public:
         m_key(std::move(key)),
         m_byte_offset(klen),   // key already written; value begins here
         m_written(0)
-    {}
+    {
+      if (db) {
+        u32 blks_to_skip = klen / db->s_cs.blockFreeSize();
+        for(u32 i = 0; i < blks_to_skip; ++i) {
+          m_cur_blk = db->s_cs.s_bls[m_cur_blk].idx;
+        }
+      }
+    }
 
     simdb*       m_db             {nullptr};
     u32          m_start_blk      {0};
+    u32          m_cur_blk        {0};
     VerIdx       m_vi             {};
     u32          m_klen           {0};
     u32          m_value_capacity {0};
@@ -2274,6 +2279,11 @@ public:
   {
     assert(m_isOpen);
     const u32 klen  = static_cast<u32>(key.length());
+    assert(klen > 0);
+    if (klen < 1) {
+      return WriteStream{};
+    }
+
     const u32 total = klen + max_value_bytes;
     const u32 hash  = CncrHsh::HashBytes(key.data(), klen);
 
@@ -2283,6 +2293,8 @@ public:
       m_error = simdb_error::OUT_OF_SPACE;
       return WriteStream{};
     }
+
+    m_error = simdb_error::NO_ERRORS;
 
     // Write the key portion into the allocated blocks safely
     {
@@ -2307,12 +2319,15 @@ public:
   ///        zero-copy callback, without materialising the full value.
   ///
   /// The callback receives pointers directly into the shared-memory blocks.
+  /// These pointers are ONLY valid during the callback execution. Callers MUST NOT
+  /// store or use them after the callback returns.
+  ///
   /// Returning false from the callback stops the iteration early.
   ///
   /// @param key   Key to look up.
   /// @param cb    Callable with signature `bool(const void* chunk, u32 len)`.
   /// @returns true if the key was found and the callback consumed all chunks,
-  ///          false if the key was not found or the callback returned false.
+  ///          false if the key was not found, the callback returned false, or the entry was replaced mid-read.
   template<typename Callback>
   bool read_stream(str const& key, Callback&& cb) const
   {
@@ -2331,6 +2346,11 @@ public:
     CncrStr::BlkLst bl = s_cs.incReaders(vi.idx);
     if (bl.len == 0) return false;
 
+    if (bl.version != vi.version || s_cs.compare(vi.idx, vi.version, key.data(), klen, hash) != MATCH_TRUE) {
+      s_cs.decReadersOrDel(vi.idx, false);
+      return false;
+    }
+
     const u32 vlen   = bl.len - bl.klen;
     if (vlen == 0) {
       s_cs.decReadersOrDel(vi.idx, false);
@@ -2348,7 +2368,7 @@ public:
       u32 key_rem = bl.klen;
       while (key_rem >= blk_sz) {
         CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
-        if (nxt.version != version) goto stream_done;
+        if (nxt.version != version) { fully_consumed = false; goto stream_done; }
         cur     = nxt.idx;
         key_rem -= blk_sz;
       }
@@ -2361,7 +2381,7 @@ public:
         u32 consumed = chunk_len;
         if (consumed >= vlen) goto stream_done;
         CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
-        if (nxt.version != version) goto stream_done;
+        if (nxt.version != version) { fully_consumed = false; goto stream_done; }
         cur = nxt.idx;
         u32 remaining = vlen - consumed;
         while (remaining > 0 && cur != CncrStr::LIST_END) {
@@ -2371,7 +2391,7 @@ public:
           remaining -= clen;
           if (remaining > 0) {
             CncrStr::VerIdx n2 = s_cs.nxtBlock(cur);
-            if (n2.version != version) goto stream_done;
+            if (n2.version != version) { fully_consumed = false; goto stream_done; }
             cur = n2.idx;
           }
         }
@@ -2389,7 +2409,7 @@ public:
         remaining -= clen;
         if (remaining > 0) {
           CncrStr::VerIdx nxt = s_cs.nxtBlock(cur);
-          if (nxt.version != version) goto stream_done;
+          if (nxt.version != version) { fully_consumed = false; goto stream_done; }
           cur = nxt.idx;
         }
       }

@@ -21,24 +21,17 @@ protected:
 };
 
 TEST_F(SimdbStreamTest, RoundTripBase) {
-    std::cout << "TEST START" << std::endl;
     std::string key = "stream_key1";
     std::string payload = "Hello, streaming world!";
     
     // Write
-    std::cout << "begin_write()" << std::endl;
     auto ws = db->begin_write(key, payload.size());
-    std::cout << "begin_write() returned" << std::endl;
     ASSERT_TRUE(ws.valid());
-    std::cout << "ws is valid" << std::endl;
     EXPECT_TRUE(ws.write(payload.data(), payload.size()));
-    std::cout << "ws.write() completed" << std::endl;
     EXPECT_TRUE(ws.commit());
-    std::cout << "ws.commit() completed" << std::endl;
 
     // Verify it's not empty and regular get works
     EXPECT_EQ(db->get(key), payload);
-    std::cout << "db->get() completed" << std::endl;
 
     // Read by stream
     std::string read_back;
@@ -47,7 +40,6 @@ TEST_F(SimdbStreamTest, RoundTripBase) {
         return true;
     });
 
-    std::cout << "db->read_stream() completed" << std::endl;
     EXPECT_TRUE(stream_success);
     EXPECT_EQ(read_back, payload);
 }
@@ -108,7 +100,8 @@ TEST_F(SimdbStreamTest, ExplicitAbort) {
 TEST_F(SimdbStreamTest, BackpressurePoolEmpty) {
     // Create a very small DB: blockSize=64, blockCount=5
     // Each allocation will take at least 1 block for key + some for value
-    simdb small_db("simdb_stream_small", 64, 5);
+    std::string dbName = "simdb_stream_small_" + std::to_string(testing::UnitTest::GetInstance()->random_seed());
+    simdb small_db(dbName.c_str(), 64, 5);
     
     // Fill up the DB with regular puts
     bool success = true;

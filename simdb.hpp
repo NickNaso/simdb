@@ -2115,6 +2115,12 @@ public:
   /// A WriteStream must NOT be shared between threads. It is a single-owner,
   /// single-writer object. The underlying blocks are invisible to all other
   /// threads until commit().
+  ///
+  /// ### Lifetime
+  /// The WriteStream holds a non-owning pointer to its parent simdb.
+  /// The simdb instance MUST cleanly outlive the WriteStream and MUST NOT
+  /// be moved or re-assigned while the stream is active, otherwise the
+  /// WriteStream will hold a dangling pointer leading to a use-after-free.
   class WriteStream {
   public:
     WriteStream() noexcept = default;
@@ -2356,6 +2362,8 @@ public:
       "read_stream callback must have signature: bool(const void*, uint32_t)");
 
     const u32 klen = static_cast<u32>(key.length());
+    if (klen < 1) return false;
+    
     const u32 hash = CncrHsh::HashBytes(key.data(), klen);
 
     // Locate the block-list head via the hash table

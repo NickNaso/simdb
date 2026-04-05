@@ -2291,7 +2291,6 @@ public:
   {
     assert(m_isOpen);
     const u32 klen  = static_cast<u32>(key.length());
-    assert(klen > 0);
     if (klen < 1) {
       // Empty keys are not supported; preserve the previous error state.
       return WriteStream{};

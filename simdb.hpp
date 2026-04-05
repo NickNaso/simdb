@@ -2246,6 +2246,7 @@ public:
         m_db->s_cs.free(old.idx, old.version);
       }
 
+      m_db->m_error = simdb_error::NO_ERRORS;
       m_db = nullptr;   // prevent abort() in destructor
       return true;
     }

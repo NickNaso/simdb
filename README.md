@@ -1,8 +1,12 @@
+[![CI](https://github.com/NickNaso/simdb/actions/workflows/ci.yml/badge.svg)](https://github.com/NickNaso/simdb/actions/workflows/ci.yml)
+[![Cross-Compile Zig Release](https://github.com/NickNaso/simdb/actions/workflows/zig-release.yml/badge.svg)](https://github.com/NickNaso/simdb/actions/workflows/zig-release.yml)
 
 ![alt text](https://github.com/LiveAsynchronousVisualizedArchitecture/simdb/blob/master/numbered_slots_upshot.jpg "A key value store is kind of like this")
 
 # SimDB
 #### A high performance, shared memory, lock-free, cross platform, single file, no dependencies, C++20 key-value store.
+
+*Note: This project is based on the original work from [LiveAsynchronousVisualizedArchitecture/simdb](https://github.com/LiveAsynchronousVisualizedArchitecture/simdb).*
 
 SimDB is part of LAVA (Live Asynchronous Visualized Architecture) which is a series of single file, minimal dependency, C++20 files to create highly concurrent software while the program being written runs live with internal data visualized.
 

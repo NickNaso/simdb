@@ -1,5 +1,6 @@
 
 /*
+  Copyright 2026 Nicola Del Gobbo
   Copyright 2017 Simeon Bassett
 
   Licensed under the Apache License, Version 2.0 (the "License");

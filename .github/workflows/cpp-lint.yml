@@ -19,7 +19,7 @@ jobs:
         run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
         
       - name: Run clang-tidy
-        # Drive the file list directly from compile_commands.json so that only files 
-        # with compilation flags are analyzed, avoiding errors on standalone headers
+        # Drive the file list directly from compile_commands.json but filter out vendor 
+        # dependencies (like GoogleTest) so we don't lint third-party translation units.
         run: |
-          jq -r '.[].file' build/compile_commands.json | xargs -d '\n' clang-tidy -p build/
+          jq -r '.[].file | select(contains("_deps") | not)' build/compile_commands.json | xargs -d '\n' clang-tidy -p build/

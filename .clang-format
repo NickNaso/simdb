@@ -4,4 +4,4 @@ ColumnLimit: 120
 AllowShortIfStatementsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: true
 DerivePointerAlignment: false
-PointerAlignment: Left
+PointerAlignment: Leftù

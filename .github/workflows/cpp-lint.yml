@@ -11,15 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install clang-tidy
         run: sudo apt-get update && sudo apt-get install -y clang-tidy
-        
+
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        
+
       - name: Run clang-tidy
-        # Drive the file list directly from compile_commands.json but filter out vendor 
-        # dependencies (like GoogleTest) so we don't lint third-party translation units.
+        # We explicitly exclude the build directory tests/deps which are generally untouched
         run: |
-          jq -r '.[].file | select(contains("_deps") | not)' build/compile_commands.json | xargs -d '\n' clang-tidy -p build/
+          find . -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.c" -o -name "*.h" \) -not -path "*/build/*" | xargs clang-tidy -p build/

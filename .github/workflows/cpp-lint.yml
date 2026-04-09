@@ -19,6 +19,7 @@ jobs:
         run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
         
       - name: Run clang-tidy
-        # We explicitly exclude the build directory tests/deps which are generally untouched
+        # Drive the file list directly from compile_commands.json so that only files 
+        # with compilation flags are analyzed, avoiding errors on standalone headers
         run: |
-          find . -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.c" -o -name "*.h" \) -not -path "*/build/*" | xargs clang-tidy -p build/
+          jq -r '.[].file' build/compile_commands.json | xargs -d '\n' clang-tidy -p build/

@@ -19,12 +19,15 @@ jobs:
         # Export compile commands so clang-tidy knows the exact flags for each TU.
         run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
       - name: Run clang-tidy
-        # run-clang-tidy reads compile_commands.json and spawns clang-tidy only
-        # on the translation units listed there.  The -source-filter regex keeps
-        # us away from FetchContent'd third-party code under _deps/.
+        # Extract first-party TUs from compile_commands.json with jq (excluding
+        # anything under _deps/), then hand that list to run-clang-tidy as
+        # positional arguments — the only supported way to filter sources.
         run: |
-          run-clang-tidy \
-            -p build \
-            -source-filter '^((?!/_deps/).)*\.cpp$' \
-            -quiet
+          mapfile -t FILES < <(
+            jq -r '.[].file | select(contains("/_deps/") | not)' build/compile_commands.json
+          )
+          run-clang-tidy -p build -quiet "${FILES[@]}"

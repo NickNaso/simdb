@@ -47,7 +47,7 @@ TEST_F(SimdbTest, OutOfSpaceBehavior) {
     simdb small_db("simdb_test_small", 64, 5);
     
     bool success = true;
-    for(int i=0; i<100; ++i) {
+    for (int i = 0; i < 100; ++i) {
         success = small_db.put("key_" + std::to_string(i), "value_" + std::to_string(i));
         if (!success) break;
     }
@@ -74,7 +74,7 @@ TEST_F(SimdbTest, GetWithVersion) {
 
 TEST_F(SimdbTest, BinaryDataSerialization) {
     // Generate synthetic binary data (e.g., matching a raw image, protobuf, or dense numbers)
-    std::vector<uint8_t> original_data(4096); 
+    std::vector<uint8_t> original_data(4096);
     for (size_t i = 0; i < original_data.size(); ++i) {
         original_data[i] = static_cast<uint8_t>(i % 256);
     }

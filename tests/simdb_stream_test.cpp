@@ -107,7 +107,7 @@ TEST_F(SimdbStreamTest, BackpressurePoolEmpty) {
     
     // Fill up the DB with regular puts
     bool success = true;
-    for(int i=0; i<4; ++i) {
+    for (int i = 0; i < 4; ++i) {
         success = small_db.put("key_" + std::to_string(i), "val");
         if (!success) break;
     }

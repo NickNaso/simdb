@@ -124,9 +124,7 @@ TEST_F(SimdbStreamTest, BackpressurePoolEmpty) {
 TEST_F(SimdbStreamTest, MultipleChunks) {
     std::string key = "multi_chunk";
     std::vector<std::string> chunks = {
-        "chunk1_",
-        "chunk2_is_longer_",
-        "c3",
+        "chunk1_", "chunk2_is_longer_", "c3",
         std::string(5000, 'x') // force across blocks with the fixture's 4096-byte block size
     };
 

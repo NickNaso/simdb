@@ -8,5 +8,6 @@ DerivePointerAlignment: false
 PointerAlignment: Left
 SortIncludes: Never
 SpaceBeforeParens: ControlStatements
-AllowShortFunctionsOnASingleLine: Inline
+AllowShortFunctionsOnASingleLine: Empty
 AllowShortLambdasOnASingleLine: Inline
+SpacesBeforeTrailingComments: 1

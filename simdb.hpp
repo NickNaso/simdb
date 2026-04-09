@@ -408,7 +408,7 @@ public:
   lava_vec(lava_vec const&)       = delete;
   void operator=(lava_vec const&) = delete;
 
-  lava_vec(lava_vec&& rval){ p=rval.p; rval.p=nullptr; }
+  lava_vec(lava_vec&& rval) noexcept { p=rval.p; rval.p=nullptr; }
   ~lava_vec(){}
 
   T& operator[](u64 i){ return data()[i]; }
@@ -1589,7 +1589,7 @@ public:
       if(sm.hndlPtr){
         munmap(sm.hndlPtr, sm.size);  // todo: size here needs to be the total size, and errors need to be checked
       }
-      remove(sm.path);
+      (void)remove(sm.path);
       // todo: deal with errors here as well
     #endif
 
@@ -1618,7 +1618,7 @@ public:
     if(len > sizeof(sm.path)-1){
       *error_code = simdb_error::PATH_TOO_LONG;
       return std::move(sm);
-    }else{ strcat(sm.path, name); }
+    }else{ strncat(sm.path, name, sizeof(sm.path) - strlen(sm.path) - 1); }
 
     #ifdef _WIN32      // windows
       if(raw_path)
@@ -1716,14 +1716,21 @@ public:
   }
 
   SharedMem() :
+#ifdef _WIN32
+    fileHndl(nullptr),
+#else
+    fileHndl(0),
+#endif
     hndlPtr(nullptr),
     ptr(nullptr),
     size(0),
     owner(false)
-  {}
+  {
+    path[0] = '\0';
+  }
   SharedMem(SharedMem&)       = delete;
-  SharedMem(SharedMem&& rval){ mv(std::move(rval)); }
-  SharedMem& operator=(SharedMem&& rval){ mv(std::move(rval)); return *this; }
+  SharedMem(SharedMem&& rval) noexcept { mv(std::move(rval)); }
+  SharedMem& operator=(SharedMem&& rval) noexcept { mv(std::move(rval)); return *this; }
   ~SharedMem()
   {
     if(ptr){
@@ -1831,8 +1838,15 @@ public:
     s_blockCount(nullptr)
   {}
   simdb(const char* name, u32 blockSize, u32 blockCount, bool raw_path=false) : 
+    s_flags(nullptr),
+    s_cnt(nullptr),
+    s_blockSize(nullptr),
+    s_blockCount(nullptr),
+    m_error(simdb_error::NO_ERRORS),
     m_nxtChIdx(0),
     m_curChIdx(0),
+    m_blkCnt(0),
+    m_blkSz(0),
     m_isOpen(false)
   {
     simdb_error error_code = simdb_error::NO_ERRORS;
@@ -2572,10 +2586,8 @@ public:
 
     vector<string> ret;
 
-    DIR* d;                                          // d is directory handle
-    errno = ENOENT;
-    if( (d=opendir(P_tmpdir))==NULL || errno!=ENOENT){
-      closedir(d);
+    DIR* d = opendir(P_tmpdir);
+    if( !d ){
       if(error_code){ *error_code = simdb_error::DIR_NOT_FOUND; }
       return ret;
     }

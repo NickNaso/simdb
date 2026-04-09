@@ -5,7 +5,7 @@ IndentWidth: 4
 ColumnLimit: 120
 AccessModifierOffset: -4
 DerivePointerAlignment: false
-PointerAlignment: Right
+PointerAlignment: Left
 SortIncludes: Never
 SpaceBeforeParens: ControlStatements
 AllowShortFunctionsOnASingleLine: Inline

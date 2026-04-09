@@ -24,7 +24,7 @@ protected:
 TEST_F(SimdbStreamTest, RoundTripBase) {
     std::string key = "stream_key1";
     std::string payload = "Hello, streaming world!";
-    
+
     // Write
     auto ws = db->begin_write(key, static_cast<uint32_t>(payload.size()));
     ASSERT_TRUE(ws.valid());
@@ -48,12 +48,12 @@ TEST_F(SimdbStreamTest, RoundTripBase) {
 TEST_F(SimdbStreamTest, CommitWithTrim) {
     std::string key = "trim_key";
     std::string payload = "short_value";
-    
+
     // Allocate about 100 KB (much more than needed)
     uint32_t oversized_alloc = 100 * 1024;
     auto ws = db->begin_write(key, oversized_alloc);
     ASSERT_TRUE(ws.valid());
-    
+
     EXPECT_TRUE(ws.write(payload.data(), static_cast<uint32_t>(payload.size())));
     // Commit only the written part, automatically trimming
     EXPECT_TRUE(ws.commit(static_cast<uint32_t>(payload.size())));
@@ -62,14 +62,14 @@ TEST_F(SimdbStreamTest, CommitWithTrim) {
     uint32_t vlen = 0;
     db->len(key, &vlen);
     EXPECT_EQ(vlen, payload.size());
-    
+
     EXPECT_EQ(db->get(key), payload);
 }
 
 TEST_F(SimdbStreamTest, AbortDoesNotMakeEntryVisible) {
     std::string key = "abort_key";
     std::string payload = "secret_data";
-    
+
     {
         auto ws = db->begin_write(key, static_cast<uint32_t>(payload.size()));
         ASSERT_TRUE(ws.valid());
@@ -85,12 +85,12 @@ TEST_F(SimdbStreamTest, AbortDoesNotMakeEntryVisible) {
 TEST_F(SimdbStreamTest, ExplicitAbort) {
     std::string key = "abort_key_exp";
     std::string payload = "secret_data2";
-    
+
     auto ws = db->begin_write(key, static_cast<uint32_t>(payload.size()));
     ASSERT_TRUE(ws.valid());
     ws.write(payload.data(), static_cast<uint32_t>(payload.size()));
     ws.abort();
-    
+
     // Commit should fail now
     EXPECT_FALSE(ws.commit());
 
@@ -104,17 +104,17 @@ TEST_F(SimdbStreamTest, BackpressurePoolEmpty) {
     const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
     std::string dbName = std::string("simdb_stream_small_") + test_info->test_suite_name() + "_" + test_info->name();
     simdb small_db(dbName.c_str(), 64, 5);
-    
+
     // Fill up the DB with regular puts
     bool success = true;
     for (int i = 0; i < 4; ++i) {
         success = small_db.put("key_" + std::to_string(i), "val");
         if (!success) break;
     }
-    
+
     // Now try to open a stream that requires more blocks than available
     auto ws = small_db.begin_write("big_stream", 1024);
-    
+
     EXPECT_FALSE(ws.valid());
     EXPECT_FALSE(ws.write("data", 4));
     EXPECT_FALSE(ws.commit());
@@ -129,7 +129,7 @@ TEST_F(SimdbStreamTest, MultipleChunks) {
         "c3",
         std::string(5000, 'x') // force across blocks with the fixture's 4096-byte block size
     };
-    
+
     uint32_t total_size = 0;
     std::string expected;
     for (const auto& c : chunks) {
@@ -139,7 +139,7 @@ TEST_F(SimdbStreamTest, MultipleChunks) {
 
     auto ws = db->begin_write(key, static_cast<uint32_t>(total_size));
     ASSERT_TRUE(ws.valid());
-    
+
     for (const auto& c : chunks) {
         EXPECT_TRUE(ws.write(c.data(), static_cast<uint32_t>(c.size())));
     }
@@ -157,7 +157,7 @@ TEST_F(SimdbStreamTest, MultipleChunks) {
 TEST_F(SimdbStreamTest, ReadStreamEarlyExit) {
     std::string key = "early_exit";
     std::string payload(5000, 'A'); // Requires multiple blocks
-    
+
     db->put(key, payload);
 
     uint32_t total_read = 0;
@@ -186,7 +186,7 @@ TEST_F(SimdbStreamTest, LargeBinaryData) {
 
     auto ws = db->begin_write(key, static_cast<uint32_t>(data.size()));
     ASSERT_TRUE(ws.valid());
-    
+
     // Write in 64KB chunks
     const size_t chunk_size = 64 * 1024;
     size_t written = 0;
@@ -199,11 +199,11 @@ TEST_F(SimdbStreamTest, LargeBinaryData) {
 
     std::vector<uint8_t> read_back;
     read_back.reserve(data.size());
-    
+
     bool stream_success = db->read_stream(key, [&read_back](const void* chunk, uint32_t len) {
         const uint8_t* u8_chunk = static_cast<const uint8_t*>(chunk);
         read_back.insert(read_back.end(), u8_chunk, u8_chunk + len);
-        return true; 
+        return true;
     });
 
     EXPECT_TRUE(stream_success);

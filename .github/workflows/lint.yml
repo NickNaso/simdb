@@ -11,9 +11,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Markdown Lint
         uses: DavidAnson/markdownlint-cli2-action@v16
         with:
           globs: "**/*.md"
           config: ".markdownlint-cli2.yaml"
+
+  cpp-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang-format clang-tidy cmake
+
+      - name: Check C++ formatting
+        # Verifies that all .cpp files under tests/ are formatted according to
+        # .clang-format. Fails if any file needs reformatting.
+        run: |
+          clang-format --dry-run --Werror tests/*.cpp
+
+      - name: Generate compile commands
+        # clang-tidy needs compile_commands.json for accurate analysis.
+        # CMAKE_EXPORT_COMPILE_COMMANDS does not affect the build itself.
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy
+        # Only analyses .cpp test files. Issues inside simdb.hpp are suppressed
+        # via HeaderFilterRegex in .clang-tidy.
+        run: |
+          clang-tidy -p build tests/*.cpp

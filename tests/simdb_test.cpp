@@ -32,7 +32,7 @@ TEST_F(SimdbTest, PutAndGetString) {
 TEST_F(SimdbTest, DeleteRemovesKey) {
     db->put("key_to_delete", "val");
     EXPECT_EQ(db->get("key_to_delete"), "val");
-    
+
     db->del("key_to_delete");
     EXPECT_EQ(db->get("key_to_delete"), "");
 }
@@ -45,13 +45,13 @@ TEST_F(SimdbTest, ListDatabases) {
 TEST_F(SimdbTest, OutOfSpaceBehavior) {
     // Create a very small DB: blockSize=64, blockCount=5
     simdb small_db("simdb_test_small", 64, 5);
-    
+
     bool success = true;
-    for(int i=0; i<100; ++i) {
+    for (int i = 0; i < 100; ++i) {
         success = small_db.put("key_" + std::to_string(i), "value_" + std::to_string(i));
         if (!success) break;
     }
-    
+
     EXPECT_FALSE(success);
     EXPECT_EQ(small_db.error(), simdb_error::OUT_OF_SPACE);
 }
@@ -64,27 +64,27 @@ TEST_F(SimdbTest, GetWithVersion) {
 
     std::string out_val;
     bool ok = db->get(keys[0], &out_val);
-    
+
     EXPECT_TRUE(ok);
     EXPECT_EQ(out_val, "version_1");
-    
+
     // Test the string returning overload
     EXPECT_EQ(db->get(keys[0]), "version_1");
 }
 
 TEST_F(SimdbTest, BinaryDataSerialization) {
     // Generate synthetic binary data (e.g., matching a raw image, protobuf, or dense numbers)
-    std::vector<uint8_t> original_data(4096); 
+    std::vector<uint8_t> original_data(4096);
     for (size_t i = 0; i < original_data.size(); ++i) {
         original_data[i] = static_cast<uint8_t>(i % 256);
     }
-    
+
     // Store binary data natively through the STL vector template overload
     db->put("binary_payload", original_data);
-    
+
     // Extract binary data identically via memory mapping
     std::vector<uint8_t> retrieved_data = db->get<uint8_t>("binary_payload");
-    
+
     // Ensure accurate binary equivalence and retrieval lengths
     EXPECT_EQ(original_data.size(), retrieved_data.size());
     EXPECT_EQ(original_data, retrieved_data);

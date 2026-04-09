@@ -1,0 +1,4 @@
+Checks: 'bugprone-*,cert-*,performance-*,misc-*,-performance-no-int-to-ptr,-misc-no-recursion,-bugprone-macro-parentheses,-bugprone-sizeof-expression,-cert-dcl37-c,-cert-dcl51-cpp,-bugprone-reserved-identifier,-bugprone-narrowing-conversions,-cert-oop54-cpp'
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+FormatStyle: none

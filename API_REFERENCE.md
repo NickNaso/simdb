@@ -130,6 +130,11 @@ Extracts payloads dynamically as zero-copy chunks utilizing an injection callbac
 
 > **Note**: The `chunk` pointers provided to the callback point directly into shared map memory and are ONLY valid during the callback execution. Storing or using them after the callback returns will result in dangling pointers and invalid access.
 
+**Concurrency & Safety Guarantees**:
+- **Exception Safety**: Backed by internal RAII guards, so if your callback throws an exception during block-traversal, all active reader counts and memory locks are securely decremented and released without leaking.
+- **Concurrent Replacements**: Resolves `MATCH_TRUE_WRONG_VERSION` states automatically. By validating the memory version block post-lock, it can gracefully handle and ignore in-flight hash table replacements safely.
+- **Empty Key Optimization**: Lookups targeting structurally empty keys short-circuit upfront, dodging unnecessary shared-memory locking mechanisms entirely.
+
 ```cpp
 template<typename Callback>
 bool read_stream(str const& key, Callback&& cb) const;

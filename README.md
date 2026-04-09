@@ -1,4 +1,4 @@
-![alt text](/simdb.png "A key value store is kind of like this")
+![SimDB key-value store architecture diagram](./simdb.png "A key value store is kind of like this")
 
 # SimDB
 

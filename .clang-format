@@ -1,0 +1,13 @@
+---
+# .clang-format — project-wide C++ formatting style
+# Run: clang-format -i <file>
+Language:        Cpp
+BasedOnStyle:    LLVM
+ColumnLimit:     120
+IndentWidth:     2
+TabWidth:        2
+UseTab:          Never
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+SortIncludes:    true

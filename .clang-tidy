@@ -1,0 +1,6 @@
+Checks: 'bugprone-*,cert-*,performance-*,misc-*,-performance-no-int-to-ptr,-misc-no-recursion,-bugprone-macro-parentheses,-bugprone-sizeof-expression,-cert-dcl37-c,-cert-dcl51-cpp,-bugprone-reserved-identifier,-bugprone-narrowing-conversions,-cert-oop54-cpp,-misc-const-correctness,-misc-non-private-member-variables-in-classes,-bugprone-easily-swappable-parameters,-bugprone-implicit-widening-of-multiplication-result,-misc-unused-parameters,-performance-enum-size,-misc-include-cleaner,-cert-dcl59-cpp,-bugprone-assignment-in-if-condition,-clang-analyzer-deadcode.DeadStores'
+WarningsAsErrors: '*'
+# Only surface diagnostics from first-party sources; suppress noise from
+# FetchContent'd dependencies (e.g. GoogleTest under _deps/).
+HeaderFilterRegex: '^((?!/_deps/).)*\.(hpp|h)$'
+FormatStyle: none

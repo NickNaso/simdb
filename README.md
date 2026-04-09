@@ -35,13 +35,13 @@ simdb db("test", 1024, 4096);
 
 This creates a shared memory file that will be named "simdb_test". It will be a file in a temp directory on Linux and OSX and a 'section object' in the current windows session namespace (basically a temp file complicated by windows nonsense).
 
-It will have 4096 blocks of 1024 bytes each.  It will contain about 4 megabytes of space in its blocks and the actual file will have a size of about 4MB + some overhead for the organization (though the OS won't write pages of the memory map to disk unless it is neccesary).
+It will have 4096 blocks of 1024 bytes each.  It will contain about 4 megabytes of space in its blocks and the actual file will have a size of about 4MB + some overhead for the organization (though the OS won't write pages of the memory map to disk unless it is necessary).
 
 ```cpp
 auto dbs = simdb_listDBs();
 ```
 
-This will return a list of the simdb files in the temp directory as a std::vector of std::string.  Simdb files are automatically prefixed with "simdb_" and thus can searched for easily here.  This can make interprocess communication easier so that you can do things like list the available db files in a GUI.  It is here for convenience largely because of how difficult it is to list the temporary memory mapped files on windows.
+This will return a list of the simdb files in the temp directory as a std::vector of std::string.  Simdb files are automatically prefixed with "simdb_" and thus can be searched for easily here.  This can make interprocess communication easier so that you can do things like list the available db files in a GUI.  It is here for convenience largely because of how difficult it is to list the temporary memory mapped files on windows.
 
 ```cpp
 db.put("lock free", "is the way to be");

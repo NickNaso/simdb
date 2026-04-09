@@ -1716,14 +1716,21 @@ public:
   }
 
   SharedMem() :
+#ifdef _WIN32
+    fileHndl(nullptr),
+#else
+    fileHndl(0),
+#endif
     hndlPtr(nullptr),
     ptr(nullptr),
     size(0),
     owner(false)
-  {}
+  {
+    path[0] = '\0';
+  }
   SharedMem(SharedMem&)       = delete;
-  SharedMem(SharedMem&& rval){ mv(std::move(rval)); }
-  SharedMem& operator=(SharedMem&& rval){ mv(std::move(rval)); return *this; }
+  SharedMem(SharedMem&& rval) noexcept { mv(std::move(rval)); }
+  SharedMem& operator=(SharedMem&& rval) noexcept { mv(std::move(rval)); return *this; }
   ~SharedMem()
   {
     if(ptr){
@@ -1830,9 +1837,16 @@ public:
     s_blockSize(nullptr),
     s_blockCount(nullptr)
   {}
-  simdb(const char* name, u32 blockSize, u32 blockCount, bool raw_path=false) : 
+  simdb(const char* name, u32 blockSize, u32 blockCount, bool raw_path=false) :
+    s_flags(nullptr),
+    s_cnt(nullptr),
+    s_blockSize(nullptr),
+    s_blockCount(nullptr),
+    m_error(simdb_error::NO_ERRORS),
     m_nxtChIdx(0),
     m_curChIdx(0),
+    m_blkCnt(0),
+    m_blkSz(0),
     m_isOpen(false)
   {
     simdb_error error_code = simdb_error::NO_ERRORS;
@@ -2572,10 +2586,8 @@ public:
 
     vector<string> ret;
 
-    DIR* d;                                          // d is directory handle
-    errno = ENOENT;
-    if( (d=opendir(P_tmpdir))==NULL || errno!=ENOENT){
-      closedir(d);
+    DIR* d = opendir(P_tmpdir);                      // d is directory handle
+    if( !d ){
       if(error_code){ *error_code = simdb_error::DIR_NOT_FOUND; }
       return ret;
     }

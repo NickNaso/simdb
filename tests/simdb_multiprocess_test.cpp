@@ -272,6 +272,8 @@ TEST_F(MultiProcessTest, ParentUpdateChildVerifies) {
     for (int i = 0; i < kUpd; ++i) {
         ASSERT_TRUE(db_->put("upd_key_" + std::to_string(i), "v2_" + std::to_string(i)))
             << "Update put() failed at i=" << i;
+        EXPECT_EQ(db_->get("upd_key_" + std::to_string(i)), "v2_" + std::to_string(i))
+            << "Parent failed to read its own v2 update!";
     }
 
     // Child verifies updated values.

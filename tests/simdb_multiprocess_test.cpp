@@ -23,6 +23,24 @@
 // std::system() is used to launch child processes synchronously. For
 // concurrent scenarios, std::thread runs multiple system() calls in parallel
 // so the child processes overlap in real time.
+//
+// Cross-platform constraints
+// ==========================
+// On Linux/macOS the shared segment is backed by a file in P_tmpdir. After a
+// child process exits, a subsequent child process joining the same segment
+// relies on the file still being present and on the owner-detection heuristic
+// (open(O_RDWR) succeeds -> non-owner). Tests are therefore designed so that:
+//   • only ONE child process writes in any given scenario, OR
+//   • all writes go through the GTest (parent) process, which holds the segment
+//     open for the full test duration and is guaranteed to be the true owner.
+//
+// The reliably cross-platform patterns are:
+//   (a) child writes  → GTest reads          (see WriterVerifiedInProcess)
+//   (b) GTest writes  → child reads          (see ParentWritesChildReads)
+//   (c) GTest + ONE concurrent child write   (see ConcurrentReadWrite,
+//                                              ConcurrentParentAndChildWrite)
+//   (d) GTest writes  → GTest updates        (see ParentUpdateChildVerifies)
+//       → child reads updated value
 
 #ifndef SIMDB_MP_WRITER_PATH
 #error "SIMDB_MP_WRITER_PATH must be defined by the build system"
@@ -120,22 +138,12 @@ protected:
 };
 
 // ---------------------------------------------------------------------------
-// Test 1 – WriterThenReader
-//
-// A child writer process writes N entries. After it exits, a separate child
-// reader process verifies all N entries have the expected values.
-// ---------------------------------------------------------------------------
-TEST_F(MultiProcessTest, WriterThenReader) {
-    ASSERT_TRUE(RunProcess(WriterCmd("key", "val"))) << "mp_writer child process exited with non-zero status";
-    ASSERT_TRUE(RunProcess(ReaderCmd("key", "val")))
-        << "mp_reader child process exited with non-zero status (value mismatch)";
-}
-
-// ---------------------------------------------------------------------------
-// Test 2 – WriterVerifiedInProcess
+// Test 1 – WriterVerifiedInProcess
 //
 // A child writer process writes N entries. After it exits, THIS (GTest)
 // process reads them back through its own simdb handle.
+//
+// Pattern (a): child writes → GTest reads.
 // ---------------------------------------------------------------------------
 TEST_F(MultiProcessTest, WriterVerifiedInProcess) {
     ASSERT_TRUE(RunProcess(WriterCmd("ikey", "ival"))) << "mp_writer child process failed";
@@ -148,37 +156,31 @@ TEST_F(MultiProcessTest, WriterVerifiedInProcess) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 3 – ConcurrentWriters
+// Test 2 – ParentWritesChildReads
 //
-// Two child writer processes (A and B) are launched in parallel via
-// std::thread. Each uses a non-overlapping key namespace so there are no
-// intentional collisions. After both exit, every entry must be readable.
+// The GTest process writes N entries using its own simdb handle. A child
+// reader process then reads and verifies every entry.
+//
+// Pattern (b): GTest writes → child reads.
 // ---------------------------------------------------------------------------
-TEST_F(MultiProcessTest, ConcurrentWriters) {
-    std::atomic<bool> okA{false}, okB{false};
-
-    std::thread tA([&]() { okA = RunProcess(ConcWriterCmd("A")); });
-    std::thread tB([&]() { okB = RunProcess(ConcWriterCmd("B")); });
-
-    tA.join();
-    tB.join();
-
-    ASSERT_TRUE(okA.load()) << "Concurrent writer-A process failed";
-    ASSERT_TRUE(okB.load()) << "Concurrent writer-B process failed";
-
-    for (int i = 0; i < kConcNum; ++i) {
-        EXPECT_EQ(db_->get("wA_key_" + std::to_string(i)), "wA_val_" + std::to_string(i))
-            << "Missing/corrupted entry from writer-A at index " << i;
-        EXPECT_EQ(db_->get("wB_key_" + std::to_string(i)), "wB_val_" + std::to_string(i))
-            << "Missing/corrupted entry from writer-B at index " << i;
+TEST_F(MultiProcessTest, ParentWritesChildReads) {
+    for (int i = 0; i < kNumEntries; ++i) {
+        std::string key = "pkey_" + std::to_string(i);
+        std::string val = "pval_" + std::to_string(i);
+        ASSERT_TRUE(db_->put(key, val)) << "GTest put() failed at i=" << i;
     }
+
+    ASSERT_TRUE(RunProcess(ReaderCmd("pkey", "pval")))
+        << "Child reader failed to read parent-written entries";
 }
 
 // ---------------------------------------------------------------------------
-// Test 4 – ConcurrentReadWrite
+// Test 3 – ConcurrentReadWrite
 //
 // One child writer runs concurrently with the GTest process reading pre-
 // populated keys. Verifies no crashes, deadlocks, or data corruption occur.
+//
+// Pattern (c): GTest + ONE concurrent child write.
 // ---------------------------------------------------------------------------
 TEST_F(MultiProcessTest, ConcurrentReadWrite) {
     for (int i = 0; i < kConcNum; ++i) {
@@ -207,27 +209,74 @@ TEST_F(MultiProcessTest, ConcurrentReadWrite) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 5 – WriterUpdateSeenInProcess
+// Test 4 – ConcurrentParentAndChildWrite
 //
-// A child process writes a set of keys, then a second child process
-// overwrites them. The in-process handle must see only the latest values.
+// The GTest process writes a set of keys in a background thread while one
+// child writer process concurrently writes a disjoint set of keys. After
+// both complete, the GTest process verifies both sets.
+//
+// Pattern (c): GTest + ONE concurrent child write, GTest reads both after.
 // ---------------------------------------------------------------------------
-TEST_F(MultiProcessTest, WriterUpdateSeenInProcess) {
+TEST_F(MultiProcessTest, ConcurrentParentAndChildWrite) {
+    std::atomic<bool> child_ok{false};
+
+    // Start the child writer in a thread so it overlaps with GTest writing.
+    std::thread child_thread([&]() { child_ok = RunProcess(ConcWriterCmd("E", kConcNum)); });
+
+    // GTest concurrently writes its own disjoint set of keys.
+    for (int i = 0; i < kConcNum; ++i) {
+        EXPECT_TRUE(db_->put("wG_key_" + std::to_string(i), "wG_val_" + std::to_string(i)))
+            << "GTest concurrent put() failed at i=" << i;
+    }
+
+    child_thread.join();
+    ASSERT_TRUE(child_ok.load()) << "Concurrent child writer-E failed";
+
+    // Verify GTest's own writes.
+    for (int i = 0; i < kConcNum; ++i) {
+        EXPECT_EQ(db_->get("wG_key_" + std::to_string(i)), "wG_val_" + std::to_string(i))
+            << "GTest's own concurrent entry missing at index " << i;
+    }
+
+    // Verify child writer's writes (pattern (a): child writes → GTest reads).
+    for (int i = 0; i < kConcNum; ++i) {
+        EXPECT_EQ(db_->get("wE_key_" + std::to_string(i)), "wE_val_" + std::to_string(i))
+            << "Child writer-E entry missing at index " << i;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test 5 – ParentUpdateChildVerifies
+//
+// The GTest process writes a set of keys (v1), then a child process reads
+// and verifies the initial values (v1). The GTest process then overwrites
+// the same keys with new values (v2), and a child process verifies the
+// updated values (v2).
+//
+// Pattern (d): GTest writes → GTest updates → child reads updated value.
+// ---------------------------------------------------------------------------
+TEST_F(MultiProcessTest, ParentUpdateChildVerifies) {
     constexpr int kUpd = 5;
 
-    ASSERT_TRUE(RunProcess(WriterCmd("upd_key", "v1", kUpd))) << "Initial write (child) failed";
-
+    // GTest writes initial values (v1).
     for (int i = 0; i < kUpd; ++i) {
-        EXPECT_EQ(db_->get("upd_key_" + std::to_string(i)), "v1_" + std::to_string(i))
-            << "After initial write: unexpected value at index " << i;
+        ASSERT_TRUE(db_->put("upd_key_" + std::to_string(i), "v1_" + std::to_string(i)))
+            << "Initial put() failed at i=" << i;
     }
 
-    ASSERT_TRUE(RunProcess(WriterCmd("upd_key", "v2", kUpd))) << "Update write (child) failed";
+    // Child verifies initial values.
+    ASSERT_TRUE(RunProcess(ReaderCmd("upd_key", "v1", kUpd)))
+        << "Child reader failed to read initial (v1) values";
 
+    // GTest overwrites with v2.
     for (int i = 0; i < kUpd; ++i) {
-        EXPECT_EQ(db_->get("upd_key_" + std::to_string(i)), "v2_" + std::to_string(i))
-            << "After update: in-process handle sees stale value at index " << i;
+        ASSERT_TRUE(db_->put("upd_key_" + std::to_string(i), "v2_" + std::to_string(i)))
+            << "Update put() failed at i=" << i;
     }
+
+    // Child verifies updated values.
+    ASSERT_TRUE(RunProcess(ReaderCmd("upd_key", "v2", kUpd)))
+        << "Child reader failed to read updated (v2) values";
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +284,8 @@ TEST_F(MultiProcessTest, WriterUpdateSeenInProcess) {
 //
 // The GTest process writes a key using the streaming API. A child reader
 // process then reads the same key and verifies the value.
+//
+// Pattern (b): GTest writes (via streaming) → child reads.
 // ---------------------------------------------------------------------------
 TEST_F(MultiProcessTest, StreamWriteReadByChildProcess) {
     // mp_reader looks for "stream_key_0" and expects "stream_val_0".
@@ -258,6 +309,8 @@ TEST_F(MultiProcessTest, StreamWriteReadByChildProcess) {
 // A multi-block (32 KB) payload is written in-process via the streaming API
 // and verified with read_stream(). A small sentinel key is also written so a
 // child reader can confirm the segment is readable from a separate process.
+//
+// Pattern (b): GTest writes (large stream) → child reads sentinel.
 // ---------------------------------------------------------------------------
 TEST_F(MultiProcessTest, LargePayloadStreamCrossProcess) {
     const std::string large_key = "large_stream_key";

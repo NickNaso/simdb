@@ -1989,6 +1989,19 @@ public:
         SharedMem::FreeAnon(m_mem);                                                       // close and delete the shared memory - this is done automatically on windows when all processes are no longer accessing a shared memory file
         return true;
       }
+      // Not the last process: unmap our view of the shared memory without
+      // removing the backing file.  Clear m_mem so that the SharedMem
+      // destructor does not decrement s_cnt a second time (double-decrement
+      // bug). On POSIX the extra decrement previously drove s_cnt to 0,
+      // causing remove() of the backing file while other processes still
+      // needed it.
+      #ifdef _WIN32
+        if(m_mem.hndlPtr){ UnmapViewOfFile(m_mem.hndlPtr); }
+        if(m_mem.fileHndl){ CloseHandle(m_mem.fileHndl); }
+      #elif defined(__APPLE__) || defined(__MACH__) || defined(__unix__) || defined(__FreeBSD__) || defined(__linux__)
+        if(m_mem.hndlPtr){ munmap(m_mem.hndlPtr, m_mem.size); }
+      #endif
+      m_mem.clear();
     }
     return false;
   }

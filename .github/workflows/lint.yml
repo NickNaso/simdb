@@ -29,10 +29,11 @@ jobs:
           sudo apt-get install -y clang-format clang-tidy cmake
 
       - name: Check C++ formatting
-        # Verifies that all .cpp files under tests/ are formatted according to
-        # .clang-format. Fails if any file needs reformatting.
+        # Verifies that all .cpp files under tests/ (including subdirectories)
+        # are formatted according to .clang-format.
+        # Fails if any file needs reformatting.
         run: |
-          clang-format --dry-run --Werror tests/*.cpp
+          clang-format --dry-run --Werror tests/*.cpp tests/helpers/*.cpp
 
       - name: Generate compile commands
         # clang-tidy needs compile_commands.json for accurate analysis.
@@ -43,7 +44,7 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Run clang-tidy
-        # Only analyses .cpp test files. Issues inside simdb.hpp are suppressed
-        # via HeaderFilterRegex in .clang-tidy.
+        # Analyses all .cpp test files including the multi-process helpers.
+        # Issues inside simdb.hpp are suppressed via HeaderFilterRegex in .clang-tidy.
         run: |
-          clang-tidy -p build tests/*.cpp
+          clang-tidy -p build tests/*.cpp tests/helpers/*.cpp

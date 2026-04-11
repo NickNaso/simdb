@@ -6,7 +6,7 @@
 // Architecture
 // ============
 // SimDB uses OS-level named shared memory (CreateFileMappingA on Windows;
-// mmap+tmpfile on Linux/macOS). Every process that constructs a simdb object
+// mmap on a named file under P_tmpdir on Linux/macOS). Every process that constructs a simdb object
 // with the same name attaches to the same segment. The segment lives as long
 // as at least one process holds it open (s_cnt > 0).
 //

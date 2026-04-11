@@ -111,6 +111,12 @@ protected:
         // and increment s_cnt. The segment is destroyed when this fixture tears
         // down and s_cnt reaches 0.
         db_ = std::make_unique<simdb>(db_name_.c_str(), kBlockSize, kBlockCount);
+
+        // Verify that the shared-memory segment was successfully created and
+        // mapped before any test body runs. If this check fails the test is
+        // aborted immediately, preventing UB from dereferencing uninitialized
+        // internal pointers.
+        ASSERT_NE(db_->mem(), nullptr) << "simdb shared-memory mapping failed for: " << db_name_;
     }
 
     void TearDown() override {

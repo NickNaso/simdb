@@ -22,9 +22,17 @@ int main(int argc, char* argv[]) {
     }
 
     const char* db_name = argv[1];
-    uint32_t block_size = static_cast<uint32_t>(std::stoul(argv[2]));
-    uint32_t block_count = static_cast<uint32_t>(std::stoul(argv[3]));
-    int num_entries = std::stoi(argv[4]);
+    uint32_t block_size = 0;
+    uint32_t block_count = 0;
+    int num_entries = 0;
+    try {
+        block_size = static_cast<uint32_t>(std::stoul(argv[2]));
+        block_count = static_cast<uint32_t>(std::stoul(argv[3]));
+        num_entries = std::stoi(argv[4]);
+    } catch (const std::exception& e) {
+        std::cerr << "mp_writer: invalid argument: " << e.what() << "\n";
+        return 1;
+    }
     std::string key_prefix = argv[5];
     std::string val_prefix = argv[6];
 

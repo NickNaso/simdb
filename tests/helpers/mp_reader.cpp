@@ -37,8 +37,7 @@ int main(int argc, char* argv[]) {
         std::string expected = exp_prefix + "_" + std::to_string(i);
         std::string actual = db.get(key);
         if (actual != expected) {
-            std::cerr << "mp_reader: mismatch key=" << key << " expected=" << expected
-                      << " got=" << actual << "\n";
+            std::cerr << "mp_reader: mismatch key=" << key << " expected=" << expected << " got=" << actual << "\n";
             ++failures;
         }
     }

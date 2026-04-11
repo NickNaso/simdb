@@ -37,6 +37,10 @@ int main(int argc, char* argv[]) {
     std::string exp_prefix = argv[6];
 
     simdb db(db_name, block_size, block_count);
+    if (db.mem() == nullptr) {
+        std::cerr << "mp_reader: failed to attach to shared-memory segment '" << db_name << "'\n";
+        return 1;
+    }
 
     int failures = 0;
 

@@ -62,9 +62,9 @@ add_executable(simdb_multiprocess_test
 )
 target_link_libraries(simdb_multiprocess_test simdb GTest::gtest GTest::gtest_main)
 target_compile_definitions(simdb_multiprocess_test PRIVATE
-  SIMDB_MP_WRITER_PATH="$<SHELL_PATH:$<TARGET_FILE:simdb_mp_writer>>"
-  SIMDB_MP_READER_PATH="$<SHELL_PATH:$<TARGET_FILE:simdb_mp_reader>>"
-  SIMDB_MP_CONC_WRITER_PATH="$<SHELL_PATH:$<TARGET_FILE:simdb_mp_concurrent_writer>>"
+  SIMDB_MP_WRITER_PATH="$<TARGET_FILE:simdb_mp_writer>"
+  SIMDB_MP_READER_PATH="$<TARGET_FILE:simdb_mp_reader>"
+  SIMDB_MP_CONC_WRITER_PATH="$<TARGET_FILE:simdb_mp_concurrent_writer>"
 )
 
 # Ensure helper binaries are built before the integration test binary.

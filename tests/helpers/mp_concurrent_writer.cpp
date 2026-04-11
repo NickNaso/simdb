@@ -14,6 +14,7 @@
 #include "simdb.hpp"
 
 #include <cstdint>
+#include <exception>
 #include <iostream>
 #include <string>
 

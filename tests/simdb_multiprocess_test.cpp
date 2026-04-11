@@ -55,6 +55,7 @@
 #include <gtest/gtest.h>
 #include "simdb.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -224,7 +225,7 @@ TEST_F(MultiProcessTest, ConcurrentParentAndChildWrite) {
 
     // GTest concurrently writes its own disjoint set of keys.
     for (int i = 0; i < kConcNum; ++i) {
-        EXPECT_TRUE(db_->put("wG_key_" + std::to_string(i), "wG_val_" + std::to_string(i)))
+        ASSERT_TRUE(db_->put("wG_key_" + std::to_string(i), "wG_val_" + std::to_string(i)))
             << "GTest concurrent put() failed at i=" << i;
     }
 

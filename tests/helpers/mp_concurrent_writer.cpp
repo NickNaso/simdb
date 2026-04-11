@@ -39,6 +39,10 @@ int main(int argc, char* argv[]) {
     std::string writer_id = argv[5];
 
     simdb db(db_name, block_size, block_count);
+    if (db.mem() == nullptr) {
+        std::cerr << "mp_concurrent_writer: failed to attach to shared-memory segment '" << db_name << "'\n";
+        return 1;
+    }
 
     for (int i = 0; i < num_entries; ++i) {
         std::string key = "w" + writer_id + "_key_" + std::to_string(i);

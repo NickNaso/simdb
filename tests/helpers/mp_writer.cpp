@@ -37,6 +37,10 @@ int main(int argc, char* argv[]) {
     std::string val_prefix = argv[6];
 
     simdb db(db_name, block_size, block_count);
+    if (db.mem() == nullptr) {
+        std::cerr << "mp_writer: failed to attach to shared-memory segment '" << db_name << "'\n";
+        return 1;
+    }
 
     for (int i = 0; i < num_entries; ++i) {
         std::string key = key_prefix + "_" + std::to_string(i);

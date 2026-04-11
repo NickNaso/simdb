@@ -69,7 +69,7 @@ namespace {
 
 // Run a shell command synchronously. Returns true iff the child exits 0.
 bool RunProcess(const std::string& cmd) {
-    return std::system(cmd.c_str()) == 0;  // NOLINT(cert-env33-c)
+    return std::system(cmd.c_str()) == 0; // NOLINT(cert-env33-c)
 }
 
 // Wrap a path in double-quotes so embedded spaces are safe on both cmd.exe
@@ -83,7 +83,7 @@ constexpr uint32_t kBlockCount = 256;
 constexpr int kNumEntries = 10;
 constexpr int kConcNum = 20;
 
-}  // namespace
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Test fixture
@@ -112,18 +112,18 @@ protected:
         db_ = std::make_unique<simdb>(db_name_.c_str(), kBlockSize, kBlockCount);
     }
 
-    void TearDown() override { db_.reset(); }
+    void TearDown() override {
+        db_.reset();
+    }
 
     // Command builders
 
-    std::string WriterCmd(const std::string& key_prefix, const std::string& val_prefix,
-                          int num = kNumEntries) const {
+    std::string WriterCmd(const std::string& key_prefix, const std::string& val_prefix, int num = kNumEntries) const {
         return Q(SIMDB_MP_WRITER_PATH) + " " + db_name_ + " " + std::to_string(kBlockSize) + " " +
                std::to_string(kBlockCount) + " " + std::to_string(num) + " " + key_prefix + " " + val_prefix;
     }
 
-    std::string ReaderCmd(const std::string& key_prefix, const std::string& exp_prefix,
-                          int num = kNumEntries) const {
+    std::string ReaderCmd(const std::string& key_prefix, const std::string& exp_prefix, int num = kNumEntries) const {
         return Q(SIMDB_MP_READER_PATH) + " " + db_name_ + " " + std::to_string(kBlockSize) + " " +
                std::to_string(kBlockCount) + " " + std::to_string(num) + " " + key_prefix + " " + exp_prefix;
     }
@@ -170,8 +170,7 @@ TEST_F(MultiProcessTest, ParentWritesChildReads) {
         ASSERT_TRUE(db_->put(key, val)) << "GTest put() failed at i=" << i;
     }
 
-    ASSERT_TRUE(RunProcess(ReaderCmd("pkey", "pval")))
-        << "Child reader failed to read parent-written entries";
+    ASSERT_TRUE(RunProcess(ReaderCmd("pkey", "pval"))) << "Child reader failed to read parent-written entries";
 }
 
 // ---------------------------------------------------------------------------
@@ -265,8 +264,7 @@ TEST_F(MultiProcessTest, ParentUpdateChildVerifies) {
     }
 
     // Child verifies initial values.
-    ASSERT_TRUE(RunProcess(ReaderCmd("upd_key", "v1", kUpd)))
-        << "Child reader failed to read initial (v1) values";
+    ASSERT_TRUE(RunProcess(ReaderCmd("upd_key", "v1", kUpd))) << "Child reader failed to read initial (v1) values";
 
     // GTest overwrites with v2.
     for (int i = 0; i < kUpd; ++i) {
@@ -275,8 +273,7 @@ TEST_F(MultiProcessTest, ParentUpdateChildVerifies) {
     }
 
     // Child verifies updated values.
-    ASSERT_TRUE(RunProcess(ReaderCmd("upd_key", "v2", kUpd)))
-        << "Child reader failed to read updated (v2) values";
+    ASSERT_TRUE(RunProcess(ReaderCmd("upd_key", "v2", kUpd))) << "Child reader failed to read updated (v2) values";
 }
 
 // ---------------------------------------------------------------------------

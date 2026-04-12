@@ -1822,15 +1822,17 @@ private:
 
 public:
   simdb() : 
-    m_nxtChIdx(0),
-    m_curChIdx(0),
-    m_isOpen(false),
     s_flags(nullptr),
     s_cnt(nullptr),
     s_blockSize(nullptr),
-    s_blockCount(nullptr)
+    s_blockCount(nullptr),
+    m_error(simdb_error::NO_ERRORS),
+    m_nxtChIdx(0),
+    m_curChIdx(0),
+    m_isOpen(false)
   {}
   simdb(const char* name, u32 blockSize, u32 blockCount, bool raw_path=false) : 
+    m_error(simdb_error::NO_ERRORS),
     m_nxtChIdx(0),
     m_curChIdx(0),
     m_isOpen(false)
@@ -2513,6 +2515,7 @@ public:
     static RTLINITUNICODESTRING   RtlInitUnicodeString   = nullptr;
     
     vector<string> ret;
+    if(error_code){ *error_code = simdb_error::NO_ERRORS; }
 
     if(!NtOpenDirectoryObject){  
       //NtOpenDirectoryObject  = (NTOPENDIRECTORYOBJECT)GetLibraryProcAddress( _T("ntdll.dll"), "NtOpenDirectoryObject");
@@ -2529,11 +2532,19 @@ public:
       NtOpenFile = (NTOPENFILE)GetLibraryProcAddress( (PSTR)"ntdll.dll", (PSTR)"NtOpenFile" );
     }
 
+    if(!NtOpenDirectoryObject || !NtQueryDirectoryObject){
+      if(error_code){ *error_code = simdb_error::DIR_NOT_FOUND; }
+      return ret;
+    }
+
     HANDLE     hDir = NULL;
     IO_STATUS_BLOCK  isb = { 0 };
     DWORD sessionId;
     BOOL         ok = ProcessIdToSessionId(GetCurrentProcessId(), &sessionId);
-    if(!ok){ return { "Could not get current session" }; }
+    if(!ok){
+      if(error_code){ *error_code = simdb_error::DIR_NOT_FOUND; }
+      return ret;
+    }
 
     wstring     sesspth = L"\\Sessions\\" + to_wstring(sessionId) + L"\\BaseNamedObjects";
     const WCHAR* mempth = sesspth.data();
@@ -2558,15 +2569,27 @@ public:
       /*STANDARD_RIGHTS_READ |*/ DIRECTORY_QUERY, 
       &oa);
 
-    if(hDir==NULL || status!=STATUS_SUCCESS){ return { "Could not open file" }; }
+    if(hDir==NULL || status!=STATUS_SUCCESS){
+      if(error_code){ *error_code = simdb_error::DIR_NOT_FOUND; }
+      return ret;
+    }
 
     BOOLEAN rescan = TRUE;
     ULONG      ctx = 0;
     ULONG   retLen = 0;
-    do
+    while(true)
     {
       status = NtQueryDirectoryObject(hDir, buf, sizeof(buf), TRUE, rescan, &ctx, &retLen);
       rescan = FALSE;
+      if(status==STATUS_NO_MORE_ENTRIES || status==STATUS_NO_MORE_FILES){
+        break;
+      }
+      if(status!=STATUS_SUCCESS){
+        if(error_code){ *error_code = simdb_error::DIR_ENTRY_ERROR; }
+        CloseHandle(hDir);
+        return std::vector<std::string>();
+      }
+
       auto info = (OBJECT_DIRECTORY_INFORMATION*)buf;
 
       if( lstrcmpW(info->type.Buffer, L"Section")!=0 ){ continue; }
@@ -2579,7 +2602,10 @@ public:
       string    name = cnvrtr.to_bytes(wname);
 
       ret.push_back(name);
-    }while(status!=STATUS_NO_MORE_ENTRIES);
+    }
+
+    CloseHandle(hDir);
+    if(error_code){ *error_code = simdb_error::NO_ERRORS; }
     
     return ret;
   }

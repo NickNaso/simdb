@@ -1822,14 +1822,14 @@ private:
 
 public:
   simdb() : 
-    m_error(simdb_error::NO_ERRORS),
-    m_nxtChIdx(0),
-    m_curChIdx(0),
-    m_isOpen(false),
     s_flags(nullptr),
     s_cnt(nullptr),
     s_blockSize(nullptr),
-    s_blockCount(nullptr)
+    s_blockCount(nullptr),
+    m_error(simdb_error::NO_ERRORS),
+    m_nxtChIdx(0),
+    m_curChIdx(0),
+    m_isOpen(false)
   {}
   simdb(const char* name, u32 blockSize, u32 blockCount, bool raw_path=false) : 
     m_error(simdb_error::NO_ERRORS),

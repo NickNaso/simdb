@@ -1,173 +1,176 @@
 # SimDB API Reference
 
-This document serves as the formal technical Reference for the `simdb` C++ library. For guides on how to use these interfaces or build the code, please refer to the main `README.md`.
+This document describes the public API exposed by `simdb.hpp`.
+For setup and tutorial examples, see `README.md`.
 
-## Data Structures
+## Error Codes
 
-### `simdb::VerStr`
-A lightweight struct binding a string payload to its block progression version. Used extensively to guarantee consistent lock-free iteration and reads.
 ```cpp
-struct VerStr { 
-  u32 ver; 
-  std::string str; 
+enum class simdb_error {
+  NO_ERRORS = 2,
+  DIR_NOT_FOUND,
+  DIR_ENTRY_ERROR,
+  COULD_NOT_OPEN_MAP_FILE,
+  COULD_NOT_MEMORY_MAP_FILE,
+  SHARED_MEMORY_ERROR,
+  FTRUNCATE_FAILURE,
+  FLOCK_FAILURE,
+  PATH_TOO_LONG,
+  OUT_OF_SPACE
 };
 ```
 
-### `simdb_error`
-An enumerator defining standard failure states you might encounter when attempting to instantiate the map or assign boundaries that exceed hardware sizes.
-- `NO_ERRORS = 2`: Initialization and operations succeeded.
-- `DIR_NOT_FOUND`: Internal OS failure traversing shared/tmp spaces.
-- `DIR_ENTRY_ERROR`: Internal OS failure listing files.
-- `COULD_NOT_OPEN_MAP_FILE`: OS denied map creation.
-- `COULD_NOT_MEMORY_MAP_FILE`: Paging creation failed natively.
-- `SHARED_MEMORY_ERROR`: Generic shared memory handle fault.
-- `FTRUNCATE_FAILURE` / `FLOCK_FAILURE`: Memory resizing boundaries failed.
-- `OUT_OF_SPACE`: The configured block allocations limits (`blockCount`) is entirely exhausted by users or previous keys.
+Notes:
+- `NO_ERRORS` means the last relevant operation succeeded.
+- `OUT_OF_SPACE` is used when block allocation fails or stream publication fails.
 
----
+## Main Type
 
-## Constants
-- **`simdb::EMPTY`**: Represents a functionally empty or unused slot.
-- **`simdb::DELETED`**: Represents a tombstone index marking deleted elements inside the hash map.
-- **`simdb::LIST_END`**: The marker designating the end of a contiguous concurrent block sequence.
+### Constructor
 
----
-
-## Core Operations
-
-### `simdb()` (*Constructor*)
-Open or create a new concurrent memory mapped file utilizing the shared space for inter-process communications.
 ```cpp
-simdb(const char* name, u32 blockSize, u32 blockCount, bool raw_path=false);
+simdb(const char* name, u32 blockSize, u32 blockCount, bool raw_path = false);
 ```
-- **name**: Name of the database pool to generate/access (e.g. `"my_data_pool"` prefixing `simdb_my_data_pool`).
-- **blockSize**: Allocation granularity per partition block (e.g., `4096`).
-- **blockCount**: Number of available blocks in the map pool. Pre-allocates sizing instantly.
-- **raw_path**: Whether the system expects absolute path references over standard temporal pools.
 
-### `error()`
-Validates if initialization or specific structural commands operated successfully. Check specifically against `simdb_error::OUT_OF_SPACE` post-initialization.
+Parameters:
+- `name`: Logical database name. The backing shared object is prefixed with `simdb_`.
+- `blockSize`: Bytes per block.
+- `blockCount`: Number of blocks.
+- `raw_path`: If true, treat `name` as a raw path when supported by the platform backend.
+
+### Lifecycle and status
+
 ```cpp
+bool close();
 [[nodiscard]] simdb_error error() const;
+void flush() const;
 ```
 
----
+Important:
+- Move constructor and move assignment are deleted.
+- Keep a `simdb` instance at a stable address while any `WriteStream` is active.
 
-## Key/Value Manipulation
+## Key/Value Operations
 
-> **Note**: For peak efficiency across pure C/C++ memory blocks, `simdb` exposes identical signatures accepting raw `void*` alongside modernized `std::string` and `std::vector<T>` generic overloads.
+### Raw API
 
-### `put(...)`
-Atomically allocate block lists for a specified key and safely stream the value data array inside. Does not guarantee atomicity over the *contents* byte streaming, but absolutely locks out conflicting overwrites structurally or concurrent mapping overlaps.
 ```cpp
-// String convenience
-i64  put(str const& key, str const& value);
-
-// Vector convenience
-template<class T>
-i64  put(str const& key, std::vector<T> const& val);
-
-// Raw pointer implementation
-bool put(const void* const key, u32 klen, const void* const val, u32 vlen, u32* out_startBlock=nullptr);
+i64  len(const void* key, u32 klen, u32* out_vlen = nullptr, u32* out_version = nullptr) const;
+bool get(const void* key, u32 klen, void* out_val, u32 vlen, u32* out_readlen = nullptr) const;
+bool put(const void* key, u32 klen, const void* val, u32 vlen, u32* out_startBlock = nullptr);
+bool del(const void* key, u32 klen);
 ```
-**Returns**: `false` on collision logic exhaustion or explicitly if `OUT_OF_SPACE`.
 
-### `get(...)`
-Validates key match bounds and reads the sequential inner sequences into pre-allocated outputs natively. 
+### C-string convenience
+
 ```cpp
-// String implementations
-std::string get(std::string const& key) const;
+bool get(const char* key, void* val, u32 vlen) const;
+bool put(const char* key, const void* val, u32 vlen, u32* out_startBlock = nullptr);
+```
+
+### std::string convenience
+
+```cpp
+i64         len(std::string const& key, u32* out_vlen = nullptr, u32* out_version = nullptr) const;
+i64         put(std::string const& key, std::string const& value);
 bool        get(std::string const& key, std::string* out_value) const;
+std::string get(std::string const& key) const;
+bool        del(std::string const& key);
+```
 
-// Struct-Safe Validated Get
+### Version-aware reads
+
+```cpp
+struct VerStr {
+  u32 ver;
+  std::string str;
+};
+
 bool        get(VerStr const& vs, std::string* out_value) const;
+std::string get(VerStr const& vs) const;
+```
 
-// Typesafe Generic Vector Implementations
-template<class T> 
+### Vector convenience
+
+```cpp
+template<class T>
 std::vector<T> get(std::string const& key);
 
-// Raw Pointer Implementations
-bool        get(const void* const key, u32 klen, void* const out_val, u32 vlen, u32* out_readlen=nullptr) const;
+template<class T>
+i64 put(std::string const& key, std::vector<T> const& val);
 ```
-**Notes**: The `VerStr` overload bypasses heavy map hashes entirely and is recommended if iterating bulk values continuously.
 
-### `del(...)`
-Deletes the key hash map pointer tracking to flag the underlying memory chain up for cyclic lock-free reuse.
+## Iteration and Discovery
+
 ```cpp
-bool del(std::string const& key);
-bool del(const void* const key, u32 klen);
+VerStr               nxtKey(u64* searched = nullptr) const;
+std::vector<VerStr>  getKeyStrs() const;
+[[nodiscard]] std::vector<std::string> simdb_listDBs(simdb_error* error_code = nullptr);
 ```
 
-### `len(...)`
-Retrieve the current byte-width stored in relation to the specified memory key index to provision strings sizes prior to parsing.
+Behavior notes:
+- `nxtKey` iterates keys using the internal hash traversal state.
+- `getKeyStrs` returns a sorted snapshot of currently discoverable keys.
+- `simdb_listDBs` lists available SimDB instances in the OS-specific backing space.
+
+## Streaming API
+
+Use the streaming API for large values when you want chunked writes and zero-copy chunked reads.
+
+### `WriteStream`
+
+Created by `begin_write`.
+
 ```cpp
-i64 len(std::string const& key, u32* out_vlen=nullptr, u32* out_version=nullptr) const;
-i64 len(const void* const key, u32 klen, u32* out_vlen=nullptr, u32* out_version=nullptr) const;
+class WriteStream {
+public:
+  [[nodiscard]] bool valid() const noexcept;
+  bool write(const void* data, u32 len) noexcept;
+  bool commit(u32 committed_bytes = 0) noexcept;
+  void abort() noexcept;
+};
 ```
 
----
+Semantics:
+- `valid()` is false when pre-allocation failed.
+- `write()` fails if you exceed the reserved max size.
+- `commit()` publishes the entry atomically in the hash table.
+- `abort()` frees reserved blocks without publication.
 
-## Streaming Operations
+### Begin write
 
-To support extremely large values, such as images or continuous byte bursts, without exhausting application memory, `simdb` offers a low-level chunk-based streaming API.
-
-### `simdb::WriteStream` (RAII)
-Handles writing payload sequences sequentially. Obtain this structured handle via `begin_write`.
-> **Important**: `WriteStream` is inextricably tied to its parent `simdb` instance. To prevent dangling pointers and dangling locks, `simdb` move construction and move assignment are **explicitly disabled** (deleted). The parent `simdb` instance must remain at a stable address and cleanly outlive all its active streams.
-- **`valid()`**: `bool` – Validates that the internal map had enough block-pool capacity to allocate the stream buffer. This does **not** guarantee that `commit()` will succeed.
-- **`write(const void*, u32)`**: `bool` – Copies chunks directly into the memory blocks. Returns `false` if exceeding the `max_value_bytes` supplied to `begin_write`.
-- **`commit(u32 committed_bytes = 0)`**: `bool` – Attempts to publish the fully populated data atomically inside the Hash table. This can still return `false` even when `valid()` was `true`, for example if the stream was allocated successfully but the Hash table cannot accept the new entry during publication. If you pass `committed_bytes` less than your initial request, the excess blocks are returned to the pool efficiently.
-- **`abort()`**: `void` – Trashes the pre-allocated structures without exposing them to other processes. Triggers automatically on destruction if `commit` wasn't invoked.
-
-### `begin_write(...)`
-Atomically configure space for a contiguous stream sequence without applying table access constraints. Data written remains strictly invisible cross-process until explicitly committed. Be careful to check `valid()` before writing, but note that successful allocation only confirms stream/block capacity; `commit()` may still fail later if publication into the Hash table cannot be completed.
 ```cpp
-[[nodiscard]] WriteStream begin_write(str const& key, u32 max_value_bytes);
+[[nodiscard]] WriteStream begin_write(std::string const& key, u32 max_value_bytes);
 ```
 
-### `read_stream(...)`
-Extracts payloads dynamically as zero-copy chunks utilizing an injection callback. Recommended strictly for immediate consumption pipelines like disk writes or networking outputs where you want to minimize `simdb` memory cloning. Iteration will cleanly bail if your callback evaluates to `false`.
+Notes:
+- Empty keys return an invalid stream.
+- Allocation or publication failures update `error()` (typically to `OUT_OF_SPACE`).
 
-> **Note**: The `chunk` pointers provided to the callback point directly into shared map memory and are ONLY valid during the callback execution. Storing or using them after the callback returns will result in dangling pointers and invalid access.
-
-**Concurrency & Safety Guarantees**:
-- **Exception Safety**: Backed by internal RAII guards, so if your callback throws during block traversal, any active reader-count guard is properly decremented before the exception escapes.
-- **Concurrent Replacements**: The lookup path accepts `MATCH_TRUE_WRONG_VERSION` during validation, but `read_stream(...)` still verifies block versions while iterating and will bail out if they change mid-read.
-- **Empty Key Optimization**: Lookups for structurally empty keys short-circuit immediately, avoiding the normal read/iteration path.
+### Read stream
 
 ```cpp
 template<typename Callback>
-bool read_stream(str const& key, Callback&& cb) const;
-// Expected Callback: bool(const void* chunk, uint32_t len)
+bool read_stream(std::string const& key, Callback&& cb) const;
 ```
 
----
+Callback contract:
+- Signature must be compatible with `bool(const void*, u32)`.
+- Chunk pointers are valid only during callback execution.
+- Returning `false` stops iteration early.
 
-## Iterators and Utility
+## Introspection Helpers
 
-### `getKeyStrs()`
-Resolves and aggregates a snapshot of every populated structured key representation existing inside the memory.
 ```cpp
-std::vector<VerStr> getKeyStrs() const;
+[[nodiscard]] u64  size() const;
+[[nodiscard]] bool isOwner() const;
+[[nodiscard]] u64  blocks() const;
+[[nodiscard]] u64  blockSize() const;
+[[nodiscard]] void* mem() const;
+[[nodiscard]] u64  memsize() const;
+[[nodiscard]] const void* data() const;
+[[nodiscard]] const void* hashData() const;
+[[nodiscard]] u32  cur() const;
 ```
 
-### `nxtKey()`
-Iterates directly forward on the linked sequences. Extremely rapid lookup bypass to avoid hashing over sequential fetches.
-```cpp
-VerStr nxtKey(u64* searched=nullptr) const;
-```
-
-### `simdb_listDBs()`
-Lists all the available `simdb` temporal memory spaces in the running operating system's temporary file locations. Useful for launching independent visualizations relying on automatic IPC detection.
-```cpp
-[[nodiscard]] std::vector<std::string> simdb_listDBs(simdb_error* error_code=nullptr);
-```
-
-### Structural Introspection getters
-Direct mappings onto the internal sizes and lock behaviors useful for diagnostics and memory safety testing scenarios.
-- `[[nodiscard]] u64 size() const`: Returns physical total byte mapping footprint configuration.
-- `[[nodiscard]] u64 blocks() const`: Returns total discrete allocation `BlockCount`.
-- `[[nodiscard]] u64 blockSize() const`: Returns static `BlockSize` configuration definitions.
-- `[[nodiscard]] void* mem() const`: Initial memory alignment offset pointing to native handles.
-- `[[nodiscard]] void* data() const`: Internal C-style array starting point indicating standard contiguous keys mappings payload.
-- `[[nodiscard]] bool isOwner() const`: Returns `true` if the local instantiating process mapped the allocation first inside the current session.
+These methods expose memory layout and ownership information useful for diagnostics and advanced tooling.

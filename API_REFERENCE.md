@@ -81,14 +81,16 @@ bool        del(std::string const& key);
 ### Version-aware reads
 
 ```cpp
-struct VerStr {
+struct simdb::VerStr {
   u32 ver;
   std::string str;
 };
 
-bool        get(VerStr const& vs, std::string* out_value) const;
-std::string get(VerStr const& vs) const;
+bool        get(simdb::VerStr const& vs, std::string* out_value) const;
+std::string get(simdb::VerStr const& vs) const;
 ```
+
+`VerStr` is declared as a nested type inside class `simdb`.
 
 ### Vector convenience
 
@@ -103,15 +105,22 @@ i64 put(std::string const& key, std::vector<T> const& val);
 ## Iteration and Discovery
 
 ```cpp
-VerStr               nxtKey(u64* searched = nullptr) const;
-std::vector<VerStr>  getKeyStrs() const;
-[[nodiscard]] std::vector<std::string> simdb_listDBs(simdb_error* error_code = nullptr);
+simdb::VerStr                     nxtKey(u64* searched = nullptr) const;
+std::vector<simdb::VerStr>        getKeyStrs() const;
 ```
 
 Behavior notes:
 - `nxtKey` iterates keys using the internal hash traversal state.
 - `getKeyStrs` returns a sorted snapshot of currently discoverable keys.
-- `simdb_listDBs` lists available SimDB instances in the OS-specific backing space.
+
+## Free Functions
+
+```cpp
+[[nodiscard]] std::vector<std::string> simdb_listDBs(simdb_error* error_code = nullptr);
+```
+
+Behavior notes:
+- `simdb_listDBs` is a namespace-scope helper (not a `simdb` member) and lists available SimDB instances in the OS-specific backing space.
 
 ## Streaming API
 

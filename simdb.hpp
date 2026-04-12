@@ -1822,6 +1822,7 @@ private:
 
 public:
   simdb() : 
+    m_error(simdb_error::NO_ERRORS),
     m_nxtChIdx(0),
     m_curChIdx(0),
     m_isOpen(false),
@@ -1831,6 +1832,7 @@ public:
     s_blockCount(nullptr)
   {}
   simdb(const char* name, u32 blockSize, u32 blockCount, bool raw_path=false) : 
+    m_error(simdb_error::NO_ERRORS),
     m_nxtChIdx(0),
     m_curChIdx(0),
     m_isOpen(false)

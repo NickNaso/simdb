@@ -121,6 +121,8 @@ Behavior notes:
 
 Behavior notes:
 - `simdb_listDBs` is a namespace-scope helper (not a `simdb` member) and lists available SimDB instances in the OS-specific backing space.
+- On failure it returns an empty vector and, when provided, sets `*error_code` (for example `DIR_NOT_FOUND` or `DIR_ENTRY_ERROR`).
+- On success, when provided, `*error_code` is set to `NO_ERRORS`.
 
 ## Streaming API
 
